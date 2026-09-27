@@ -9,11 +9,15 @@ from .models import OperationStatus
 
 
 _ALLOWED_TRANSITIONS = {
-    OperationStatus.PLANNED: {OperationStatus.RUNNING},
+    OperationStatus.PLANNED: {
+        OperationStatus.RUNNING,
+        OperationStatus.INTERRUPTED,
+    },
     OperationStatus.RUNNING: {
         OperationStatus.SUCCEEDED,
         OperationStatus.FAILED,
         OperationStatus.AWAITING_INPUT,
+        OperationStatus.INTERRUPTED,
     },
     OperationStatus.AWAITING_INPUT: {OperationStatus.RUNNING},
 }

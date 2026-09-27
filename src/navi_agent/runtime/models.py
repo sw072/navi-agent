@@ -124,6 +124,7 @@ class OperationStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     AWAITING_INPUT = "awaiting_input"
+    INTERRUPTED = "interrupted"
 
 
 @dataclass(frozen=True, slots=True)

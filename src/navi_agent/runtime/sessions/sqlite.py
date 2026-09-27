@@ -279,6 +279,22 @@ class SQLiteSessionStore:
             now = time.time()
             connection.execute(
                 """
+                UPDATE tool_executions
+                SET status = 'interrupted',
+                    updated_at = ?,
+                    completed_at = ?
+                WHERE run_id IN (
+                    SELECT id
+                    FROM runs
+                    WHERE session_id = ?
+                      AND status IN ('started', 'running')
+                )
+                  AND status IN ('planned', 'running')
+                """,
+                (now, now, session.session_id),
+            )
+            connection.execute(
+                """
                 UPDATE runs
                 SET status = 'interrupted',
                     updated_at = ?,

@@ -184,6 +184,75 @@ def test_result_hash_ignores_runtime_trace_timing() -> None:
     assert operation_result_hash(first) == operation_result_hash(second)
 
 
+@pytest.mark.parametrize("store_kind", ["memory", "sqlite"])
+def test_new_run_interrupts_unfinished_effects_but_preserves_pending_input(
+    store_kind: str,
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = (
+            InMemorySessionStore()
+            if store_kind == "memory"
+            else SQLiteSessionStore(Path(tmpdir) / "state.db")
+        )
+        session = store.load("session-1", "user-1")
+        metadata = SessionMetadata(environment_id="environment-1")
+        store.start_run(session, "run-1", metadata)
+
+        planned = store.plan_operation(
+            session,
+            "run-1",
+            ToolCall(id="planned", name="write", arguments={}),
+            step_id="step-1",
+            environment_id="environment-1",
+        )
+        running = store.plan_operation(
+            session,
+            "run-1",
+            ToolCall(id="running", name="bash", arguments={}),
+            step_id="step-1",
+            environment_id="environment-1",
+        )
+        store.mark_operation_running(running.operation_id)
+        waiting = store.plan_operation(
+            session,
+            "run-1",
+            ToolCall(id="waiting", name="approval", arguments={}),
+            step_id="step-1",
+            environment_id="environment-1",
+        )
+        store.mark_operation_running(waiting.operation_id)
+        store.complete_operation(
+            waiting.operation_id,
+            ToolResult.ok(
+                name="approval",
+                content="Approval required",
+                structured_content={"interaction_pending": True},
+            ).bind("waiting"),
+        )
+
+        store.start_run(session, "run-2", metadata)
+
+        interrupted_run = store.get_run("run-1")
+        assert interrupted_run is not None
+        assert interrupted_run.status == "interrupted"
+        assert interrupted_run.completion_reason == "superseded_by_new_run"
+        interrupted_planned = store.get_operation(planned.operation_id)
+        interrupted_running = store.get_operation(running.operation_id)
+        preserved_waiting = store.get_operation(waiting.operation_id)
+        assert interrupted_planned is not None
+        assert interrupted_planned.status is OperationStatus.INTERRUPTED
+        assert interrupted_planned.completed_at is not None
+        assert interrupted_running is not None
+        assert interrupted_running.status is OperationStatus.INTERRUPTED
+        assert interrupted_running.completed_at is not None
+        assert preserved_waiting is not None
+        assert preserved_waiting.status is OperationStatus.AWAITING_INPUT
+        assert store.list_incomplete_operations("run-1") == [preserved_waiting]
+        active_run = store.get_run("run-2")
+        assert active_run is not None
+        assert active_run.status == "running"
+
+
 def test_sqlite_migrates_legacy_tool_execution_records() -> None:
     connection = sqlite3.connect(":memory:")
     connection.row_factory = sqlite3.Row
