@@ -105,7 +105,7 @@ def build_runtime(
     session_store = SQLiteSessionStore(get_state_db_path())
     memory_store = memory_store or FileMemoryStore(get_memories_dir())
     skill_store = skill_store or FileSkillStore(get_skills_dir())
-    trace_store = _build_trace_store(config)
+    trace_store = build_trace_store(config)
     background_task_manager = BackgroundTaskManager(
         store=BackgroundTaskStore(get_state_db_path())
     )
@@ -300,7 +300,7 @@ def build_application(
     )
 
 
-def _build_trace_store(config: dict) -> JsonlTraceStore | CompositeTraceStore:
+def build_trace_store(config: dict) -> JsonlTraceStore | CompositeTraceStore:
     primary = JsonlTraceStore(get_trace_store_path())
     settings = LangfuseSettings.from_sources(config)
     if not settings.enabled:

@@ -14,6 +14,7 @@ from evals.inspect.swe_bench import (
     select_swe_bench_samples,
 )
 from navi_agent.runtime import ModelResponse, ModelUsage, ToolCall
+from navi_agent.telemetry import InMemoryTraceStore
 
 
 class FakeSandbox:
@@ -117,7 +118,7 @@ def test_rejects_dataset_revision_missing_a_pinned_sample() -> None:
         raise AssertionError("expected a missing pinned sample to fail")
 
 
-def test_sandbox_bridge_edits_and_executes_inside_inspect_environment() -> None:
+def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatch) -> None:
     async def run():
         environment = FakeSandbox()
         bridge = InspectSandboxBridge(
@@ -137,6 +138,12 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment() -> None:
         )
         return environment, result, registry
 
+    trace_store = InMemoryTraceStore()
+    monkeypatch.setattr(
+        "evals.inspect.swe_bench.build_trace_store",
+        lambda config: trace_store,
+    )
+
     environment, result, registry = asyncio.run(run())
 
     assert environment.files["module.py"] == "def answer():\n    return 2\n"
@@ -154,6 +161,7 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment() -> None:
         "read_file",
         "write_file",
     }
+    assert trace_store.get_latest_trace(session_id=result.session_id) is not None
 
 
 def test_builds_task_from_official_inspect_eval_components() -> None:

@@ -13,6 +13,7 @@ from inspect_ai.solver import TaskState, solver
 from inspect_ai.util import SandboxEnvironment, sandbox
 
 from evals.inspect.adapter import NaviInspectResult, navi_runtime_success
+from navi_agent.app.bootstrap import build_trace_store
 from navi_agent.app import AppRequest, ApplicationService
 from navi_agent.config import ModelSettings, RuntimeSettings, load_config
 from navi_agent.runtime import (
@@ -24,7 +25,6 @@ from navi_agent.runtime import (
     ToolResult,
     build_transport,
 )
-from navi_agent.telemetry import InMemoryTraceStore
 
 
 SWE_BENCH_DATASET = "princeton-nlp/SWE-bench_Verified"
@@ -294,7 +294,7 @@ class SWEBenchInspectRunner:
         sandbox_bridge: InspectSandboxBridge,
     ) -> NaviInspectResult:
         with self._lock:
-            trace_store = InMemoryTraceStore()
+            trace_store = build_trace_store(load_config())
             runtime = AgentRuntime(
                 transport=self._transport,
                 tool_registry=sandbox_bridge.tool_registry(),
