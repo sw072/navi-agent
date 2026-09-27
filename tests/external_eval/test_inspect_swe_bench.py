@@ -14,7 +14,7 @@ from evals.inspect.swe_bench import (
     select_swe_bench_samples,
 )
 from navi_agent.runtime import ModelResponse, ModelUsage, ToolCall
-from navi_agent.telemetry import InMemoryTraceStore
+from navi_agent.telemetry import InMemoryRuntimeEventStore, InMemoryTraceStore
 
 
 class FakeSandbox:
@@ -139,9 +139,14 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatc
         return environment, result, registry
 
     trace_store = InMemoryTraceStore()
+    event_store = InMemoryRuntimeEventStore()
     monkeypatch.setattr(
         "evals.inspect.swe_bench.build_trace_store",
         lambda config: trace_store,
+    )
+    monkeypatch.setattr(
+        "evals.inspect.swe_bench.JsonlRuntimeEventStore",
+        lambda path: event_store,
     )
 
     environment, result, registry = asyncio.run(run())
@@ -162,6 +167,10 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatc
         "write_file",
     }
     assert trace_store.get_latest_trace(session_id=result.session_id) is not None
+    events = event_store.list_events(run_id=result.run_id)
+    assert events
+    assert events[0].name == "runtime.started"
+    assert events[-1].name == "runtime.completed"
 
 
 def test_builds_task_from_official_inspect_eval_components() -> None:

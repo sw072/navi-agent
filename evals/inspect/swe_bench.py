@@ -16,6 +16,7 @@ from evals.inspect.adapter import NaviInspectResult, navi_runtime_success
 from navi_agent.app.bootstrap import build_trace_store
 from navi_agent.app import AppRequest, ApplicationService
 from navi_agent.config import ModelSettings, RuntimeSettings, load_config
+from navi_agent.paths import get_runtime_event_store_path
 from navi_agent.runtime import (
     AgentRuntime,
     InMemorySessionStore,
@@ -25,6 +26,7 @@ from navi_agent.runtime import (
     ToolResult,
     build_transport,
 )
+from navi_agent.telemetry import JsonlRuntimeEventStore
 
 
 SWE_BENCH_DATASET = "princeton-nlp/SWE-bench_Verified"
@@ -295,11 +297,13 @@ class SWEBenchInspectRunner:
     ) -> NaviInspectResult:
         with self._lock:
             trace_store = build_trace_store(load_config())
+            event_store = JsonlRuntimeEventStore(get_runtime_event_store_path())
             runtime = AgentRuntime(
                 transport=self._transport,
                 tool_registry=sandbox_bridge.tool_registry(),
                 session_store=InMemorySessionStore(),
                 trace_store=trace_store,
+                event_store=event_store,
                 max_iterations=self._max_iterations,
                 model=self._model,
             )
