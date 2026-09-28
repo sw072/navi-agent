@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+import os
 from threading import Lock
 from typing import Any, TypeVar
 from uuid import uuid4
@@ -13,6 +14,7 @@ from inspect_ai.solver import TaskState, solver
 from inspect_ai.util import SandboxEnvironment, sandbox
 
 from evals.inspect.adapter import NaviInspectResult, navi_runtime_success
+from evals.inspect.modal_sandbox import ModalSandboxEnvironment
 from navi_agent.app.bootstrap import build_trace_store
 from navi_agent.app import AppRequest, ApplicationService
 from navi_agent.config import ModelSettings, RuntimeSettings, load_config
@@ -360,15 +362,30 @@ def build_swe_bench_runner() -> SWEBenchInspectRunner:
 def swe_bench_solver(runner: SWEBenchInspectRunner):
     async def solve(state: TaskState, generate):
         loop = asyncio.get_running_loop()
-        result = await asyncio.to_thread(
-            runner.run,
-            state.user_prompt.text,
-            sample_id=str(state.sample_id),
-            sandbox_bridge=InspectSandboxBridge(
-                loop=loop,
-                environment=sandbox(),
-            ),
-        )
+        environment = None
+        close_environment = None
+        if os.getenv("NAVI_EVAL_SANDBOX", "docker").strip().lower() == "modal":
+            environment = await asyncio.to_thread(
+                ModalSandboxEnvironment.create,
+                sample_id=str(state.sample_id),
+                app_name=os.getenv("NAVI_MODAL_APP", "navi-swe-bench"),
+            )
+            close_environment = environment.close
+        else:
+            environment = sandbox()
+        try:
+            result = await asyncio.to_thread(
+                runner.run,
+                state.user_prompt.text,
+                sample_id=str(state.sample_id),
+                sandbox_bridge=InspectSandboxBridge(
+                    loop=loop,
+                    environment=environment,
+                ),
+            )
+        finally:
+            if close_environment is not None:
+                await close_environment()
         state.messages.append(ChatMessageAssistant(content=result.completion))
         state.output.completion = result.completion
         state.metadata["navi"] = result.metadata()

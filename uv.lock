@@ -2330,6 +2330,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+cloud = [
+    { name = "modal" },
+]
 eval = [
     { name = "inspect-ai" },
 ]
@@ -2361,11 +2364,12 @@ requires-dist = [
     { name = "inspect-evals", extras = ["swe-bench"], marker = "extra == 'swe-bench'", specifier = ">=0.16.0" },
     { name = "langfuse", specifier = ">=2.60.8" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.0,<3" },
+    { name = "modal", marker = "extra == 'cloud'", specifier = ">=1.5.3" },
     { name = "openai", specifier = ">=2.45.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
 ]
-provides-extras = ["mcp", "eval", "swe-bench"]
+provides-extras = ["mcp", "eval", "swe-bench", "cloud"]
 
 [package.metadata.requires-dev]
 dev = [

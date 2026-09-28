@@ -47,6 +47,9 @@ swe-bench = [
     "inspect-ai>=0.3.249",
     "inspect-evals[swe-bench]>=0.16.0",
 ]
+cloud = [
+    "modal>=1.5.3",
+]
 
 [dependency-groups]
 dev = [
