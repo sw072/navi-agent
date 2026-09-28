@@ -1,5 +1,7 @@
 import asyncio
+import sys
 from types import SimpleNamespace
+from types import ModuleType
 
 from inspect_ai import Task
 from inspect_ai.dataset import Sample
@@ -11,6 +13,7 @@ from evals.inspect.swe_bench import (
     InspectSandboxBridge,
     SWEBenchInspectRunner,
     navi_swe_bench_verified,
+    _official_swe_bench_task,
     select_swe_bench_samples,
 )
 from navi_agent.runtime import ModelResponse, ModelUsage, ToolCall
@@ -189,3 +192,22 @@ def test_builds_task_from_official_inspect_eval_components() -> None:
     assert task.metadata["upstream"] is True
     assert task.metadata["dataset"] == SWE_BENCH_DATASET
     assert task.metadata["sample_count"] == 15
+
+
+def test_official_task_selects_modal_sandbox_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("NAVI_EVAL_SANDBOX", "modal")
+    calls = {}
+
+    def fake_swe_bench(**kwargs):
+        calls.update(kwargs)
+        return "task"
+
+    package = ModuleType("inspect_evals")
+    module = ModuleType("inspect_evals.swe_bench")
+    module.swe_bench = fake_swe_bench
+    package.swe_bench = module
+    monkeypatch.setitem(sys.modules, "inspect_evals", package)
+    monkeypatch.setitem(sys.modules, "inspect_evals.swe_bench", module)
+
+    assert _official_swe_bench_task() == "task"
+    assert calls["sandbox_type"] == "modal"
