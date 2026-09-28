@@ -194,6 +194,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-run-id")
     parser.add_argument("--cron-poll-interval", type=float, default=60.0)
     parser.add_argument("--limit", type=int)
+    parser.add_argument(
+        "--max-samples",
+        type=int,
+        default=1,
+        help="Maximum number of evaluation samples to run concurrently",
+    )
     parser.add_argument("--sample-id", action="append")
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--case-file", type=Path)
@@ -256,6 +262,7 @@ def main() -> int:
                 limit=args.limit,
                 sample_ids=args.sample_id,
                 log_dir=args.log_dir,
+                max_samples=args.max_samples,
             )
         except EvaluationDependencyError as exc:
             parser.error(str(exc))

@@ -795,6 +795,7 @@ class CliTests(unittest.TestCase):
             limit=3,
             sample_ids=["simpleqa-8"],
             log_dir=Path("/tmp/eval-logs"),
+            max_samples=1,
         )
 
     def test_main_runs_human_eval_suite(self) -> None:
@@ -814,6 +815,7 @@ class CliTests(unittest.TestCase):
             limit=1,
             sample_ids=None,
             log_dir=None,
+            max_samples=1,
         )
 
     def test_main_rejects_unknown_eval_suite(self) -> None:

@@ -25,7 +25,10 @@ def run_inspect_eval(
     limit: int | None = None,
     sample_ids: list[str] | None = None,
     log_dir: Path | None = None,
+    max_samples: int = 1,
 ) -> int:
+    if max_samples < 1:
+        raise ValueError("max_samples must be at least 1")
     try:
         from inspect_ai import eval as inspect_eval
         from inspect_ai.model import get_model
@@ -73,7 +76,7 @@ def run_inspect_eval(
         log_dir=str(resolved_log_dir),
         limit=limit,
         sample_id=sample_ids or None,
-        max_samples=1,
+        max_samples=max_samples,
     )
 
     for log in logs:

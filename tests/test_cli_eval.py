@@ -33,6 +33,7 @@ def test_runs_inspect_with_navi_model_configuration() -> None:
                         limit=5,
                         sample_ids=["simpleqa-8"],
                         log_dir=Path("/tmp/logs"),
+                        max_samples=3,
                     )
 
     assert exit_code == 0
@@ -46,7 +47,16 @@ def test_runs_inspect_with_navi_model_configuration() -> None:
     assert inspect_eval.call_args.kwargs["model_roles"] == {"grader": fake_grader}
     assert inspect_eval.call_args.kwargs["limit"] == 5
     assert inspect_eval.call_args.kwargs["sample_id"] == ["simpleqa-8"]
-    assert inspect_eval.call_args.kwargs["max_samples"] == 1
+    assert inspect_eval.call_args.kwargs["max_samples"] == 3
+
+
+def test_rejects_invalid_concurrency() -> None:
+    try:
+        run_inspect_eval("general-qa", max_samples=0)
+    except ValueError as exc:
+        assert str(exc) == "max_samples must be at least 1"
+    else:
+        raise AssertionError("expected invalid concurrency to fail")
 
 
 def test_rejects_unknown_inspect_suite() -> None:
