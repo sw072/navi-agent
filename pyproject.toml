@@ -46,6 +46,7 @@ eval = [
 swe-bench = [
     "inspect-ai>=0.3.249",
     "inspect-evals[swe-bench]>=0.16.0",
+    "inspect-sandboxes>=0.6.0; python_version >= '3.12'",
     "modal[api-proxy-support]>=1.5.3",
 ]
 [dependency-groups]
