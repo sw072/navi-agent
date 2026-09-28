@@ -46,6 +46,7 @@ eval = [
 swe-bench = [
     "inspect-ai>=0.3.249",
     "inspect-evals[swe-bench]>=0.16.0",
+    "modal[api-proxy-support]>=1.5.3",
 ]
 [dependency-groups]
 dev = [
