@@ -661,11 +661,14 @@ class BashTool(WorkspaceTool):
                     )
                 continue
             for token in words[1:]:
-                if token.startswith("-") or token in {"!", "(", ")"}:
+                if token in {"!", "(", ")"}:
                     continue
-                path = self._command_path(token, effective_cwd)
+                path_token = self._option_path_value(token)
+                if path_token is None:
+                    continue
+                path = self._command_path(path_token, effective_cwd)
                 if path is None and command_name in self._DIRECT_FILE_COMMANDS:
-                    path = (effective_cwd / token).resolve()
+                    path = (effective_cwd / path_token).resolve()
                 if path is not None and is_sensitive_path(path):
                     return ToolResult.error(
                         name=self.name,
@@ -673,7 +676,7 @@ class BashTool(WorkspaceTool):
                         structured_content={
                             "command": command,
                             "command_name": command_name,
-                            "path": token,
+                            "path": path_token,
                             "reason": "sensitive_path",
                         },
                     )
@@ -692,6 +695,15 @@ class BashTool(WorkspaceTool):
                     )
 
         return None
+
+    @staticmethod
+    def _option_path_value(token: str) -> str | None:
+        if token.startswith("--"):
+            _, separator, value = token.partition("=")
+            return value if separator and value else None
+        if token.startswith("-"):
+            return None
+        return token
 
     @staticmethod
     def _command_path(token: str, cwd) -> Path | None:

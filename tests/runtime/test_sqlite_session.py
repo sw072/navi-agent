@@ -20,6 +20,25 @@ from navi_agent.runtime.models import ConversationState
 
 
 class SQLiteSessionStoreTests(unittest.TestCase):
+    def test_initialization_records_current_schema_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "state.db"
+            SQLiteSessionStore(path)
+
+            with sqlite3.connect(path) as connection:
+                version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+        self.assertEqual(version, 2)
+
+    def test_initialization_rejects_a_newer_schema_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "state.db"
+            with sqlite3.connect(path) as connection:
+                connection.execute("PRAGMA user_version = 999")
+
+            with self.assertRaisesRegex(ValueError, "newer than supported"):
+                SQLiteSessionStore(path)
+
     def test_load_creates_session_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             store = SQLiteSessionStore(Path(tmpdir) / "state.db")

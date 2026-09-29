@@ -38,6 +38,7 @@ from .schema import SCHEMA_STATEMENTS
 
 
 T = TypeVar("T")
+_SCHEMA_VERSION = 2
 
 
 def _tool_result_payload(result: ToolResult) -> dict[str, object]:
@@ -1342,9 +1343,18 @@ class SQLiteSessionStore:
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
-        self._execute_write(self._create_schema)
-        self._execute_write(self._migrate_environment_columns)
-        self._execute_write(self._migrate_operation_columns)
+        self._execute_write(self._initialize_schema)
+
+    @classmethod
+    def _initialize_schema(cls, connection: sqlite3.Connection) -> None:
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        if version > _SCHEMA_VERSION:
+            raise ValueError(
+                f"state database schema version {version} is newer than supported "
+                f"version {_SCHEMA_VERSION}"
+            )
+        cls._create_schema(connection)
+        cls._migrate_schema(connection, version=version)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path, timeout=self._BUSY_TIMEOUT_MS / 1000)
@@ -1358,6 +1368,23 @@ class SQLiteSessionStore:
     def _create_schema(connection: sqlite3.Connection) -> None:
         for statement in SCHEMA_STATEMENTS:
             connection.execute(statement)
+
+    @classmethod
+    def _migrate_schema(
+        cls,
+        connection: sqlite3.Connection,
+        *,
+        version: int,
+    ) -> None:
+        migrations = (
+            cls._migrate_environment_columns,
+            cls._migrate_operation_columns,
+        )
+        for target_version, migrate in enumerate(migrations, start=1):
+            if version >= target_version:
+                continue
+            migrate(connection)
+            connection.execute(f"PRAGMA user_version = {target_version}")
 
     @staticmethod
     def _migrate_environment_columns(connection: sqlite3.Connection) -> None:

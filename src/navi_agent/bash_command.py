@@ -52,12 +52,6 @@ _UNSAFE_SORT_OPTIONS = {
     "--output",
     "--random-source",
 }
-_UNSAFE_GIT_OPTIONS = {
-    "--exec",
-    "--ext-diff",
-    "--output",
-    "--textconv",
-}
 
 
 def assess_bash_command(command: str, *, background: bool = False) -> BashCommandAssessment:
@@ -108,6 +102,10 @@ def assess_bash_command(command: str, *, background: bool = False) -> BashComman
             return BashCommandAssessment(
                 "deny", f"bash command is not allowed: {executable}", parsed_commands
             )
+        if any(any(character in word for character in "*?[]{}") for word in words[1:]):
+            return BashCommandAssessment(
+                "ask", "shell path expansion requires approval", parsed_commands
+            )
         if not _is_known_read_only(words):
             return BashCommandAssessment(
                 "ask", f"bash command requires approval: {executable}", parsed_commands
@@ -134,14 +132,17 @@ def _is_known_read_only(words: tuple[str, ...]) -> bool:
     executable = words[0]
     if executable in _SAFE_COMMANDS:
         if executable == "rg":
-            return not _contains_option(words[1:], _UNSAFE_RG_OPTIONS)
+            return not (
+                _contains_option(words[1:], _UNSAFE_RG_OPTIONS)
+                or _contains_short_option(words[1:], "z")
+            )
         return True
     if executable == "cd":
         return _is_static_directory_change(words)
     if executable == "find":
         return not _contains_option(words[1:], _UNSAFE_FIND_OPTIONS)
     if executable == "git":
-        return _is_read_only_git(words)
+        return False
     if executable == "sort":
         arguments = words[1:]
         return not (
@@ -160,35 +161,6 @@ def _is_static_directory_change(words: tuple[str, ...]) -> bool:
         and target != "-"
         and not target.startswith(("-", "~"))
         and not any(character in target for character in "*?[]{}")
-    )
-
-
-def _is_read_only_git(words: tuple[str, ...]) -> bool:
-    if len(words) < 2 or words[1].startswith("-"):
-        return False
-    subcommand = words[1]
-    arguments = words[2:]
-    if _contains_option(arguments, _UNSAFE_GIT_OPTIONS):
-        return False
-    if subcommand in {"status", "log", "diff", "show"}:
-        return True
-    if subcommand != "branch":
-        return False
-    return all(
-        argument
-        in {
-            "--all",
-            "--list",
-            "--remotes",
-            "--show-current",
-            "--verbose",
-            "-a",
-            "-r",
-            "-v",
-            "-vv",
-        }
-        or argument.startswith("--format=")
-        for argument in arguments
     )
 
 

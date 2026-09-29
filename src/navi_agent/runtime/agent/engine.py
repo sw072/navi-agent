@@ -28,6 +28,7 @@ from ..models import (
     StepSnapshot,
     ToolCall,
 )
+from ..operations import operation_arguments_hash
 from ..steps import capability_names, context_projection_hash, tool_schema_projection_hash
 from .prompt import PromptBuilder
 from .control import RunCancellationToken
@@ -688,13 +689,18 @@ class AgentRuntime:
                 arguments=dict(resume_interaction.arguments or {}),
             )
             checkpoint_run_id = resume_interaction.run_id or run_id
-            resumed_operation = self._session_store.plan_operation(
-                session,
+            resumed_operation = self._session_store.get_operation_for_tool_call(
                 checkpoint_run_id,
-                resumed_call,
-                step_id="",
-                environment_id=self._environment.environment_id,
+                resumed_call.id,
             )
+            if resumed_operation is None:
+                raise ValueError("pending interaction has no operation checkpoint")
+            if (
+                resumed_operation.capability_name != resumed_call.name
+                or resumed_operation.arguments_hash
+                != operation_arguments_hash(resumed_call.arguments)
+            ):
+                raise ValueError("pending interaction does not match operation checkpoint")
             publish_event(
                 kind="observation",
                 source="runtime",
