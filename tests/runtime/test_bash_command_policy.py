@@ -21,9 +21,6 @@ class BashCommandPolicyTests(unittest.TestCase):
             "find . -type f | sort",
             "find . -type f | sort -u | wc -l",
             "rg --files | wc -l",
-            "git status --short",
-            "git log -1 --oneline",
-            "cd /workspace && git log -1 --oneline",
             "cd src; find . -type f | wc -l",
         ]
 
@@ -52,6 +49,13 @@ class BashCommandPolicyTests(unittest.TestCase):
             "cd src*",
             "cd src | pwd",
             "cd src || pwd",
+            "cat .e*",
+            "cat file?.txt",
+            "rg -nz needle .",
+            "git status --short",
+            "git log -1 --oneline",
+            "git diff",
+            "git show HEAD",
         ]
 
         for command in commands:

@@ -359,6 +359,18 @@ class BashToolTests(unittest.TestCase):
                         "sensitive_path",
                     )
 
+    def test_rejects_sensitive_paths_in_long_option_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".env").write_text("TOKEN=private\n", encoding="utf-8")
+
+            result = BashTool(root=root).invoke(
+                command="grep --exclude-from=.env TOKEN README.md"
+            )
+
+        self.assertEqual(result.status, "error")
+        self.assertEqual(result.structured_content["reason"], "sensitive_path")
+
     def test_allows_commands_that_read_environment_examples(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
