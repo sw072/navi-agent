@@ -12,6 +12,7 @@ from navi_agent.runtime import (
 )
 from navi_agent.runtime.tools.policy import SensitiveToolPolicy
 from navi_agent.tools import BashTool, FunctionTool
+from navi_agent.tools.base import BaseTool
 
 
 class ToolExecutorTests(unittest.TestCase):
@@ -123,6 +124,46 @@ class ToolExecutorTests(unittest.TestCase):
         self.assertEqual(result[0].status, "error")
         self.assertIn("outside workspace", result[0].content)
         self.assertEqual(provider.requests, [])
+
+    def test_approved_execution_repeats_preflight(self) -> None:
+        class GuardedTool(BaseTool):
+            name = "guarded"
+            description = "guarded"
+
+            def schema(self):
+                return {}
+
+            def preflight(self, context=None, **kwargs):
+                return ToolResult.error(name=self.name, content="blocked by preflight")
+
+            def invoke(self, context=None, **kwargs):
+                raise AssertionError("invoke must not run")
+
+        result = ToolExecutor(policy=SensitiveToolPolicy()).execute_approved(
+            ToolCall(id="tc1", name="guarded"),
+            {"guarded": GuardedTool()},
+        )
+
+        self.assertEqual(result.status, "error")
+        self.assertEqual(result.content, "blocked by preflight")
+
+    def test_approved_execution_honors_current_policy_denial(self) -> None:
+        tool = FunctionTool(
+            name="guarded",
+            description="guarded",
+            handler=lambda: ToolResult.ok(name="guarded", content="unexpected"),
+        )
+        executor = ToolExecutor(
+            policy=SensitiveToolPolicy(denied_tools={"guarded": "policy changed"})
+        )
+
+        result = executor.execute_approved(
+            ToolCall(id="tc1", name="guarded"),
+            {"guarded": tool},
+        )
+
+        self.assertEqual(result.status, "error")
+        self.assertEqual(result.content, "policy changed")
 
     def test_executor_marks_raised_tool_exception_with_error_type(self) -> None:
         executor = ToolExecutor(policy=SensitiveToolPolicy())

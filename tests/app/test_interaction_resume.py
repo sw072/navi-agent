@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import json
 from pathlib import Path
 
 from navi_agent.app import AppRequest, ApplicationService
@@ -95,6 +96,39 @@ def test_approval_executes_checkpoint_without_model_retry() -> None:
     assert len(transport.calls) == 2
     assert service.resolve_interaction("s1", approved=True) is None
     assert [message.role for message in resumed.messages[-2:]] == ["tool", "assistant"]
+
+
+def test_approval_rejects_a_forged_tool_call_checkpoint() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "pending.json"
+        store = JsonPendingInteractionStore(path)
+        runtime = AgentRuntime(
+            transport=_Transport(
+                [ModelResponse(tool_calls=[ToolCall(id="tc1", name="guarded")])]
+            ),
+            tool_registry=ToolRegistry(
+                tools={
+                    "guarded": lambda: ToolResult.ok(name="guarded", content="ran")
+                },
+                policy=SensitiveToolPolicy(
+                    approval_required_tools={"guarded": "approval required"}
+                ),
+                approval_provider=DeferredApprovalProvider(store),
+            ),
+        )
+        service = ApplicationService(runtime=runtime, interaction_store=store)
+        service.handle(AppRequest(session_id="s1", user_id="u1", message="run"))
+        service.resolve_interaction("s1", approved=True)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload[0]["tool_call_id"] = "forged"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+        try:
+            service.handle(AppRequest(session_id="s1", user_id="u1", message="/approve"))
+        except ValueError as exc:
+            assert str(exc) == "pending interaction has no operation checkpoint"
+        else:
+            raise AssertionError("forged checkpoint must fail closed")
 
 
 def test_denial_continues_without_executing_checkpoint() -> None:

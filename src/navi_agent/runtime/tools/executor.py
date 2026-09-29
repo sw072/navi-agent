@@ -269,6 +269,31 @@ class ToolExecutor:
                 started_at=started_at,
                 started_perf=started_perf,
             )
+        preflight_result = tool.preflight(
+            context=tool_context,
+            **tool_call.arguments,
+        )
+        if preflight_result is not None:
+            return _stamp_result(
+                preflight_result.bind(tool_call.id, tool_call.name),
+                started_at=started_at,
+                started_perf=started_perf,
+            )
+        decision = self._policy.decide(
+            tool_call.name,
+            tool_call.arguments,
+            tool_context,
+        )
+        if not decision.allows_execution and not decision.requires_approval:
+            return _stamp_result(
+                _tool_failure_result(
+                    name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                    message=decision.reason or f"Tool blocked: {tool_call.name}",
+                ),
+                started_at=started_at,
+                started_perf=started_perf,
+            )
         try:
             output = tool.invoke(context=tool_context, **tool_call.arguments)
             return _stamp_result(
