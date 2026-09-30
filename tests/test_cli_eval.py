@@ -165,9 +165,10 @@ def test_runs_terminal_bench_task() -> None:
             with patch(
                 "evals.inspect.terminal_bench.navi_terminal_bench_2_1",
                 return_value=fake_task,
-            ):
+            ) as task_factory:
                 with patch("inspect_ai.eval", return_value=[fake_log]) as inspect_eval:
                     exit_code = run_inspect_eval("terminal-bench-2-1", limit=1)
 
     assert exit_code == 0
     assert inspect_eval.call_args.args == (fake_task,)
+    task_factory.assert_called_once_with(n_tasks=1)

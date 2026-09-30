@@ -71,8 +71,13 @@ def run_inspect_eval(
         base_url=settings.base_url,
     )
     resolved_log_dir = log_dir or get_navi_home() / "evals" / "inspect"
+    task = (
+        task_factory(n_tasks=limit)
+        if suite == "terminal-bench-2-1" and limit is not None and not sample_ids
+        else task_factory()
+    )
     logs = inspect_eval(
-        task_factory(),
+        task,
         model=grader,
         model_roles={"grader": grader},
         display="plain",
