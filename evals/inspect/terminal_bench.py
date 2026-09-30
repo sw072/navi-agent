@@ -54,7 +54,11 @@ def terminal_bench_solver(runner: SWEBenchInspectRunner):
     return solve
 
 
-def _terminal_bench_task(*, n_tasks: int | None = None) -> Task:
+def _terminal_bench_task(
+    *,
+    n_tasks: int | None = None,
+    dataset_task_names: list[str] | None = None,
+) -> Task:
     try:
         from inspect_harbor import terminal_bench_2_1
     except ImportError as exc:
@@ -64,6 +68,7 @@ def _terminal_bench_task(*, n_tasks: int | None = None) -> Task:
     return terminal_bench_2_1(
         ref=TERMINAL_BENCH_REF,
         n_tasks=n_tasks,
+        dataset_task_names=dataset_task_names,
         sandbox_env_name=_sandbox_env_name(),
     )
 
@@ -73,8 +78,12 @@ def navi_terminal_bench_2_1(
     runner: SWEBenchInspectRunner | None = None,
     *,
     n_tasks: int | None = None,
+    dataset_task_names: list[str] | None = None,
 ) -> Task:
-    benchmark = _terminal_bench_task(n_tasks=n_tasks)
+    benchmark = _terminal_bench_task(
+        n_tasks=n_tasks,
+        dataset_task_names=dataset_task_names,
+    )
     benchmark.solver = terminal_bench_solver(runner or build_swe_bench_runner())
     benchmark.scorer = [
         *(list(benchmark.scorer) if benchmark.scorer else []),

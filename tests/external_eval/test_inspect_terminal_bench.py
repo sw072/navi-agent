@@ -27,6 +27,7 @@ def test_builds_terminal_bench_from_inspect_harbor(monkeypatch) -> None:
     assert calls == {
         "ref": TERMINAL_BENCH_REF,
         "n_tasks": 1,
+        "dataset_task_names": None,
         "sandbox_env_name": "modal",
     }
 

@@ -71,11 +71,13 @@ def run_inspect_eval(
         base_url=settings.base_url,
     )
     resolved_log_dir = log_dir or get_navi_home() / "evals" / "inspect"
-    task = (
-        task_factory(n_tasks=limit)
-        if suite == "terminal-bench-2-1" and limit is not None and not sample_ids
-        else task_factory()
-    )
+    task_kwargs: dict[str, object] = {}
+    if suite == "terminal-bench-2-1":
+        if limit is not None and not sample_ids:
+            task_kwargs["n_tasks"] = limit
+        if sample_ids:
+            task_kwargs["dataset_task_names"] = sample_ids
+    task = task_factory(**task_kwargs)
     logs = inspect_eval(
         task,
         model=grader,
