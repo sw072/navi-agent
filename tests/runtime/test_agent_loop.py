@@ -1,7 +1,7 @@
 import unittest
 
 from navi_agent.runtime.agent.control import RunCancelledError
-from navi_agent.runtime.agent.loop import AgentLoop
+from navi_agent.runtime.agent.loop import AgentLoop, StopDecision
 from navi_agent.runtime.agent.model_invoker import ModelInvocation
 from navi_agent.runtime.models import ModelResponse, ToolCall
 from navi_agent.tooling import ToolResult
@@ -17,6 +17,55 @@ def invocation(response: ModelResponse) -> ModelInvocation:
 
 
 class AgentLoopTest(unittest.TestCase):
+    def test_stop_hook_can_request_a_bounded_follow_up(self) -> None:
+        responses = iter(
+            [invocation(ModelResponse(content="verify first")), invocation(ModelResponse(content="done"))]
+        )
+        follow_ups = []
+
+        outcome = AgentLoop(max_iterations=3).run(
+            is_cancelled=lambda: False,
+            on_iteration_started=lambda _iteration: None,
+            invoke_model=lambda _iteration: next(responses),
+            on_model_response=lambda _iteration, _response, _discarded: None,
+            execute_tools=lambda _iteration, _response: None,
+            stop_hook=lambda _iteration, _invocation: (
+                StopDecision.follow_up("Run one final verification.")
+                if not follow_ups
+                else StopDecision.allow()
+            ),
+            on_stop_follow_up=lambda iteration, decision: follow_ups.append(
+                (iteration, decision.message)
+            ),
+        )
+
+        self.assertEqual(outcome.status, "completed")
+        self.assertEqual(outcome.iteration, 2)
+        self.assertEqual(follow_ups, [(1, "Run one final verification.")])
+
+    def test_stop_hook_does_not_run_beyond_follow_up_bound(self) -> None:
+        responses = iter(
+            [invocation(ModelResponse(content="first")), invocation(ModelResponse(content="last"))]
+        )
+        follow_ups = []
+
+        outcome = AgentLoop(max_iterations=3).run(
+            is_cancelled=lambda: False,
+            on_iteration_started=lambda _iteration: None,
+            invoke_model=lambda _iteration: next(responses),
+            on_model_response=lambda _iteration, _response, _discarded: None,
+            execute_tools=lambda _iteration, _response: None,
+            stop_hook=lambda _iteration, _invocation: StopDecision.block(
+                "Keep checking."
+            ),
+            on_stop_follow_up=lambda iteration, decision: follow_ups.append(iteration),
+            max_stop_follow_ups=1,
+        )
+
+        self.assertEqual(outcome.status, "completed")
+        self.assertEqual(outcome.iteration, 2)
+        self.assertEqual(follow_ups, [1])
+
     def test_completes_after_tools_and_a_final_response(self) -> None:
         responses = iter(
             [

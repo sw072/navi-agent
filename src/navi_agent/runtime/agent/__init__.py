@@ -7,6 +7,7 @@ from .context import (
 )
 from .control import ActiveRunRegistry, RunCancellationToken, RunCancelledError
 from .engine import AgentRuntime
+from .loop import StopDecision
 from .prompt import PromptBuilder
 from .prompt_contributors import build_default_prompt_contributors
 from .prompt_pipeline import (
@@ -40,4 +41,5 @@ __all__ = [
     "PromptSection",
     "RunCancellationToken",
     "RunCancelledError",
+    "StopDecision",
 ]

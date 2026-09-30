@@ -16,6 +16,29 @@ AgentLoopStatus = Literal[
     "waiting",
     "iteration_limit",
 ]
+StopAction = Literal["allow", "follow_up", "block"]
+
+
+@dataclass(frozen=True, slots=True)
+class StopDecision:
+    """Decision made when the model returns without tool calls."""
+
+    action: StopAction
+    message: str = ""
+
+    @classmethod
+    def allow(cls) -> "StopDecision":
+        return cls(action="allow")
+
+    @classmethod
+    def follow_up(cls, message: str) -> "StopDecision":
+        if not message.strip():
+            raise ValueError("stop follow-up message must not be empty")
+        return cls(action="follow_up", message=message)
+
+    @classmethod
+    def block(cls, message: str = "") -> "StopDecision":
+        return cls(action="block", message=message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +64,13 @@ class AgentLoop:
         invoke_model: Callable[[int], ModelInvocation],
         on_model_response: Callable[[int, ModelInvocation, bool], None],
         execute_tools: Callable[[int, ModelInvocation], ToolResult | None],
+        stop_hook: Callable[[int, ModelInvocation], StopDecision] | None = None,
+        on_stop_follow_up: Callable[[int, StopDecision], None] | None = None,
+        max_stop_follow_ups: int = 2,
     ) -> AgentLoopOutcome:
+        if max_stop_follow_ups < 0:
+            raise ValueError("max_stop_follow_ups must be non-negative")
+        stop_follow_ups = 0
         for iteration in range(1, self._max_iterations + 1):
             if is_cancelled():
                 return AgentLoopOutcome(status="cancelled", iteration=iteration - 1)
@@ -63,6 +92,12 @@ class AgentLoop:
                     invocation=invocation,
                 )
             if not invocation.response.tool_calls:
+                decision = stop_hook(iteration, invocation) if stop_hook else StopDecision.allow()
+                if decision.action != "allow" and stop_follow_ups < max_stop_follow_ups:
+                    stop_follow_ups += 1
+                    if on_stop_follow_up is not None:
+                        on_stop_follow_up(iteration, decision)
+                    continue
                 return AgentLoopOutcome(
                     status="completed",
                     iteration=iteration,

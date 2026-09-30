@@ -32,7 +32,7 @@ from ..operations import operation_arguments_hash
 from ..steps import capability_names, context_projection_hash, tool_schema_projection_hash
 from .prompt import PromptBuilder
 from .control import RunCancellationToken
-from .loop import AgentLoop
+from .loop import AgentLoop, StopDecision
 from .model_invoker import ModelInvocation, ModelInvoker
 from ..sessions.memory import InMemorySessionStore
 from ..sessions.store import SessionStore
@@ -218,6 +218,8 @@ class AgentRuntime:
         environment: EnvironmentBinding | None = None,
         close_callbacks: Sequence[Callable[[], None]] | None = None,
         convergence_policy: ConvergencePolicy | None = None,
+        stop_hook: Callable[[int, ModelInvocation], StopDecision] | None = None,
+        max_stop_follow_ups: int = 2,
     ) -> None:
         self._model_invoker = ModelInvoker(transport)
         self._tool_registry = tool_registry or ToolRegistry()
@@ -246,6 +248,8 @@ class AgentRuntime:
         self._cwd = self._environment.workspace_root
         self._close_callbacks = tuple(close_callbacks or ())
         self._convergence_policy = convergence_policy
+        self._stop_hook = stop_hook
+        self._max_stop_follow_ups = max_stop_follow_ups
         self._close_lock = Lock()
         self._closed = False
 
@@ -963,6 +967,23 @@ class AgentRuntime:
                 on_text_delta=publish_text_delta,
             )
 
+        def on_stop_follow_up(iteration_number: int, decision: StopDecision) -> None:
+            if decision.message:
+                self._session_store.append(
+                    session,
+                    Message(role="user", content=decision.message),
+                )
+            publish_event(
+                kind="observation",
+                source="runtime",
+                name="stop_hook.follow_up",
+                iteration=iteration_number,
+                payload={
+                    "action": decision.action,
+                    "message": decision.message,
+                },
+            )
+
         def record_model_invocation(
             iteration_number: int,
             model_invocation: ModelInvocation,
@@ -1137,6 +1158,9 @@ class AgentRuntime:
             invoke_model=invoke_model,
             on_model_response=record_model_invocation,
             execute_tools=execute_tools,
+            stop_hook=self._stop_hook,
+            on_stop_follow_up=on_stop_follow_up,
+            max_stop_follow_ups=self._max_stop_follow_ups,
         )
         if loop_outcome.status == "cancelled":
             return finish_cancelled(loop_outcome.iteration)
