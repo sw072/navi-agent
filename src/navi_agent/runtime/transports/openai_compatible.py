@@ -43,7 +43,7 @@ class OpenAICompatibleTransport:
             try:
                 response = self._client.chat.completions.create(
                     model=self._model,
-                    messages=[self._serialize_message(message) for message in request.messages],
+                    messages=self._serialize_messages(request.messages),
                     tools=[self._serialize_tool(tool) for tool in request.tools] or None,
                 )
                 self._raise_if_cancelled(request)
@@ -81,7 +81,7 @@ class OpenAICompatibleTransport:
             try:
                 stream = self._client.chat.completions.create(
                     model=self._model,
-                    messages=[self._serialize_message(message) for message in request.messages],
+                    messages=self._serialize_messages(request.messages),
                     tools=[self._serialize_tool(tool) for tool in request.tools] or None,
                     stream=True,
                     stream_options={"include_usage": True},
@@ -222,6 +222,21 @@ class OpenAICompatibleTransport:
             reasoning_tokens=int(getattr(completion_details, "reasoning_tokens", 0) or 0),
             cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
         )
+
+    @classmethod
+    def _serialize_messages(cls, messages: list[Message]) -> list[dict[str, Any]]:
+        # Some chat templates accept only one system message at the beginning.
+        # Runtime notifications and compaction summaries can occur later in history.
+        system_contents = []
+        serialized = []
+        for message in messages:
+            if message.role == "system":
+                system_contents.append(message.content)
+            else:
+                serialized.append(cls._serialize_message(message))
+        if system_contents:
+            serialized.insert(0, {"role": "system", "content": "\n\n".join(system_contents)})
+        return serialized
 
     @staticmethod
     def _serialize_message(message: Message) -> dict[str, Any]:

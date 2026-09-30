@@ -1,5 +1,6 @@
 import types
 import unittest
+from copy import deepcopy
 
 from navi_agent.runtime import Message, ModelRequest, OpenAICompatibleTransport, ToolCall
 from navi_agent.runtime.agent.control import RunCancelledError
@@ -23,6 +24,84 @@ class FakeClient:
 
 
 class OpenAICompatibleTransportTests(unittest.TestCase):
+    def test_system_messages_are_merged_before_conversation_in_both_modes(self) -> None:
+        messages = [
+            Message(role="system", content="Follow workspace rules."),
+            Message(role="user", content="Run the check."),
+            Message(
+                role="assistant",
+                content="",
+                reasoning_content="Check the tool result.",
+                tool_calls=[ToolCall(id="tc1", name="bash", arguments={"command": "true"})],
+            ),
+            Message(role="tool", content="Command still running", tool_call_id="tc1"),
+            Message(role="system", content="[Background task completed]\nexit_code: 0"),
+            Message(role="system", content="[Context Summary]\nEarlier work is complete."),
+            Message(role="user", content="Summarize the result."),
+        ]
+        original = deepcopy(messages)
+        expected = [
+            {
+                "role": "system",
+                "content": (
+                    "Follow workspace rules.\n\n"
+                    "[Background task completed]\nexit_code: 0\n\n"
+                    "[Context Summary]\nEarlier work is complete."
+                ),
+            },
+            {"role": "user", "content": "Run the check."},
+            {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "Check the tool result.",
+                "tool_calls": [{
+                    "id": "tc1",
+                    "type": "function",
+                    "function": {"name": "bash", "arguments": '{"command": "true"}'},
+                }],
+            },
+            {"role": "tool", "content": "Command still running", "tool_call_id": "tc1"},
+            {"role": "user", "content": "Summarize the result."},
+        ]
+        for streaming in (False, True):
+            with self.subTest(streaming=streaming):
+                client = self._generate_with_messages(messages, streaming=streaming)
+                self.assertEqual(client.chat.completions.calls[0]["messages"], expected)
+                self.assertEqual(messages, original)
+
+    def test_serialization_handles_missing_empty_and_late_system_messages(self) -> None:
+        user = Message(role="user", content="hello")
+        cases = [
+            ([], []),
+            ([user], [{"role": "user", "content": "hello"}]),
+            ([Message(role="system", content=""), user], [
+                {"role": "system", "content": ""}, {"role": "user", "content": "hello"},
+            ]),
+            ([user, Message(role="system", content="notification")], [
+                {"role": "system", "content": "notification"},
+                {"role": "user", "content": "hello"},
+            ]),
+        ]
+        for messages, expected in cases:
+            for streaming in (False, True):
+                with self.subTest(messages=messages, streaming=streaming):
+                    client = self._generate_with_messages(messages, streaming=streaming)
+                    self.assertEqual(client.chat.completions.calls[0]["messages"], expected)
+
+    @staticmethod
+    def _generate_with_messages(messages, *, streaming):
+        response = types.SimpleNamespace(choices=[types.SimpleNamespace(
+            message=types.SimpleNamespace(content="done", tool_calls=[]),
+        )])
+        client = FakeClient([] if streaming else response)
+        transport = OpenAICompatibleTransport(model="model", api_key="test", client=client)
+        request = ModelRequest(messages=messages)
+        if streaming:
+            transport.generate_stream(request, lambda _delta: None)
+        else:
+            transport.generate(request)
+        return client
+
     def test_stream_closes_when_request_is_cancelled(self) -> None:
         class CancellableStream:
             def __init__(self) -> None:
