@@ -333,6 +333,8 @@ class SWEBenchInspectRunner:
         *,
         sample_id: str,
         sandbox_bridge: InspectSandboxBridge,
+        suite: str = "swe-bench-verified",
+        system_prompt: str = SWE_BENCH_SYSTEM_PROMPT,
     ) -> NaviInspectResult:
         with self._lock:
             trace_store = build_trace_store(load_config())
@@ -348,14 +350,14 @@ class SWEBenchInspectRunner:
                 convergence_policy=_swe_bench_convergence_policy(),
             )
             app = ApplicationService(runtime)
-            session_id = f"inspect:swe-bench-verified:{sample_id}:{uuid4().hex[:8]}"
-            user_id = "inspect-swe-bench-verified"
+            session_id = f"inspect:{suite}:{sample_id}:{uuid4().hex[:8]}"
+            user_id = f"inspect-{suite}"
             result = app.handle(
                 AppRequest(
                     session_id=session_id,
                     user_id=user_id,
                     message=prompt,
-                    system_prompt=SWE_BENCH_SYSTEM_PROMPT,
+                    system_prompt=system_prompt,
                     source="inspect",
                     mode=RuntimeMode.EVAL,
                 )

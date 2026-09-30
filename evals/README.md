@@ -35,6 +35,10 @@ uv sync --extra swe-bench
 navi-agent eval run swe-bench-verified
 navi-agent eval run swe-bench-verified \
   --sample-id astropy__astropy-12907
+
+# Run one Terminal-Bench 2.1 task through Inspect Harbor.
+uv sync --extra terminal-bench
+NAVI_EVAL_SANDBOX=modal navi-agent eval run terminal-bench-2-1 --limit 1
 ```
 
 The command reads the normal Navi configuration from

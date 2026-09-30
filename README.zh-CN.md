@@ -70,6 +70,8 @@ uv run navi-agent eval run human-eval
 uv run navi-agent eval run bfcl
 uv run navi-agent eval run agentbench-os
 uv run navi-agent eval run swe-bench-verified --limit 1
+uv sync --extra terminal-bench
+NAVI_EVAL_SANDBOX=modal uv run navi-agent eval run terminal-bench-2-1 --limit 1
 ```
 
 详细说明见 [evals/README.md](evals/README.md)。
