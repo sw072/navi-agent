@@ -37,6 +37,26 @@ telemetry:
     host: https://cloud.langfuse.com
 ```
 
+## 全局与项目指令
+
+把跨项目使用的个人默认规则放在 `~/.navi-agent/AGENTS.md`，例如：
+
+```markdown
+# 全局指令
+- 回答保持简洁。
+- 修改代码后说明验证结果。
+```
+
+Navi 会把该文件作为 `[Global Instructions]` 加载在项目上下文之前，两者同时生效。
+项目中非空的 `.navi.md` 优先于项目 `AGENTS.md`，但不会替代全局指令。
+发生冲突时，当前用户请求优先于项目指令，项目指令优先于全局默认规则；
+运行时安全和审批要求仍然适用。
+
+全局文件跟随当前 Navi Home：设置 `NAVI_HOME` 时读取其中的 `AGENTS.md`；
+使用 `NAVI_PROFILE` 时读取 `~/.navi-agent/profiles/<name>/AGENTS.md`，
+不会同时加载默认 Home 中的文件。文件不存在或为空时跳过，每次对话请求重新读取。
+超过 20,000 字符时截断并保留头尾；无法读取时报告提示词加载器错误。
+
 ## MCP 工具
 
 MCP 支持本地 `stdio` 和远程 Streamable HTTP Server，并只接入其 Tools。先安装可选依赖：
@@ -107,6 +127,7 @@ Navi Home 目录包含配置和持久化状态：
 
 ```text
 ~/.navi-agent/
+├── AGENTS.md
 ├── config.yaml
 ├── state.db
 ├── pending-interactions.json

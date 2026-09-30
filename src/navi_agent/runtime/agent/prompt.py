@@ -10,6 +10,7 @@ from .prompt_contributors import (
     BASE_SYSTEM_PROMPT,
     MEMORY_GUIDANCE,
     SKILL_GUIDANCE,
+    GlobalInstructionsContributor,
     ProjectContextContributor,
     SkillIndexStore,
     build_default_prompt_contributors,
@@ -105,9 +106,10 @@ class PromptBuilder:
                 system_prompt=system_prompt,
             )
         )
-        self._last_injected_context_files = list(
-            result.references_from(ProjectContextContributor.name)
-        )
+        self._last_injected_context_files = [
+            *result.references_from(GlobalInstructionsContributor.name),
+            *result.references_from(ProjectContextContributor.name),
+        ]
         self._last_prompt_sources = tuple(section.source for section in result.sections)
         return PromptParts(
             stable=result.parts.stable,

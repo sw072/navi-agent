@@ -38,6 +38,28 @@ telemetry:
     host: https://cloud.langfuse.com
 ```
 
+## Global and project instructions
+
+Put personal defaults that apply across projects in `~/.navi-agent/AGENTS.md`, for example:
+
+```markdown
+# Global instructions
+- Keep explanations concise.
+- Summarize verification results after changing code.
+```
+
+Navi loads this file as `[Global Instructions]` before project context. Both are
+included: a project's non-empty `.navi.md` takes precedence over its `AGENTS.md`,
+but does not replace global instructions. When instructions conflict, the current
+user request takes precedence over project instructions, which take precedence
+over global defaults. Runtime safety and approval requirements still apply.
+
+The global file follows the active Navi home: `NAVI_HOME/AGENTS.md` when set, or
+`~/.navi-agent/profiles/<name>/AGENTS.md` with `NAVI_PROFILE`. Profiles do not also
+load the default home's file. Missing or empty files are skipped. Files are reread
+for each conversation request; content over 20,000 characters is truncated with
+the beginning and end retained. Unreadable files report a prompt contributor error.
+
 ## MCP tools
 
 MCP supports local `stdio` and remote Streamable HTTP servers, exposing their
@@ -111,6 +133,7 @@ The Navi home directory contains configuration and persistent state:
 
 ```text
 ~/.navi-agent/
+├── AGENTS.md
 ├── config.yaml
 ├── state.db
 ├── pending-interactions.json

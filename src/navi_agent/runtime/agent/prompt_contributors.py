@@ -6,6 +6,7 @@ from typing import Protocol
 
 from navi_agent.memory import MemoryStore
 from navi_agent.memory.validation import sanitize_memory_for_prompt
+from navi_agent.paths import get_navi_home
 
 from .prompt_pipeline import (
     PromptContributor,
@@ -52,8 +53,22 @@ SKILL_GUIDANCE = (
     "Prefer the user's current instruction when there is a conflict."
 )
 
-PROJECT_CONTEXT_MAX_CHARS = 20_000
+CONTEXT_FILE_MAX_CHARS = 20_000
 PROJECT_CONTEXT_FILE_NAMES = (".navi.md", "AGENTS.md")
+
+
+def _truncate_context(content: str, label: str) -> str:
+    if len(content) <= CONTEXT_FILE_MAX_CHARS:
+        return content
+    head_size = int(CONTEXT_FILE_MAX_CHARS * 0.7)
+    tail_size = int(CONTEXT_FILE_MAX_CHARS * 0.2)
+    return "\n".join(
+        [
+            content[:head_size].rstrip(),
+            f"[... {label} truncated ...]",
+            content[-tail_size:].lstrip(),
+        ]
+    )
 
 
 class SkillIndexStore(Protocol):
@@ -122,6 +137,36 @@ class WorkspacePromptContributor:
         )
 
 
+class GlobalInstructionsContributor:
+    name = "global-instructions"
+
+    def __init__(self, path: Path) -> None:
+        self._path = path.resolve()
+
+    def contribute(self, request: PromptRequest) -> PromptSection | None:
+        if not self._path.is_file():
+            return None
+        content = self._path.read_text(encoding="utf-8").strip()
+        if not content:
+            return None
+        return PromptSection(
+            source=self.name,
+            layer=PromptLayer.CONTEXT,
+            content="\n".join(
+                [
+                    "[Global Instructions]",
+                    "These are the user's default instructions across projects. "
+                    "When instructions conflict, prefer the user's current request, "
+                    "then applicable project instructions, then these global defaults. "
+                    "They do not override runtime safety or approval requirements.",
+                    f"## {self._path}",
+                    _truncate_context(content, "global instructions"),
+                ]
+            ),
+            references=(str(self._path),),
+        )
+
+
 class ProjectContextContributor:
     name = "project-context"
 
@@ -146,26 +191,12 @@ class ProjectContextContributor:
                         "[Project Context]",
                         "Follow this local project context when it applies to the current task.",
                         f"## {file_name}",
-                        self._truncate(content),
+                        _truncate_context(content, "project context"),
                     ]
                 ),
                 references=(file_name,),
             )
         return None
-
-    @staticmethod
-    def _truncate(content: str) -> str:
-        if len(content) <= PROJECT_CONTEXT_MAX_CHARS:
-            return content
-        head_size = int(PROJECT_CONTEXT_MAX_CHARS * 0.7)
-        tail_size = int(PROJECT_CONTEXT_MAX_CHARS * 0.2)
-        return "\n".join(
-            [
-                content[:head_size].rstrip(),
-                "[... project context truncated ...]",
-                content[-tail_size:].lstrip(),
-            ]
-        )
 
 
 class MemoryPromptContributor:
@@ -269,6 +300,7 @@ def build_default_prompt_contributors(
             project_root=project_context_root,
             additional_roots=additional_workspace_roots,
         ),
+        GlobalInstructionsContributor(get_navi_home() / "AGENTS.md"),
         ProjectContextContributor(project_context_root),
         MemoryPromptContributor(
             memory_store,
