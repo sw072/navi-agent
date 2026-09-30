@@ -1086,6 +1086,25 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(trace_store.traces[0].error_source, "runtime")
         self.assertEqual(trace_store.traces[0].error_type, "IterationLimitExceeded")
 
+    def test_runtime_requests_one_no_tool_summary_after_iteration_limit(self) -> None:
+        transport = FakeTransport(
+            [
+                ModelResponse(tool_calls=[ToolCall(id="tc1", name="echo", arguments={})]),
+                ModelResponse(content="The requested work is complete."),
+            ]
+        )
+        runtime = AgentRuntime(
+            transport=transport,
+            max_iterations=1,
+            tool_registry=ToolRegistry(tools={"echo": lambda: ok_result("echo", "tool:ok")}),
+        )
+
+        result = runtime.run_conversation(session_id="s1", user_id="u1", user_message="hello")
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.final_response, "The requested work is complete.")
+        self.assertEqual(transport.calls[-1].tools, [])
+
     def test_runtime_converts_tool_failure_into_tool_message(self) -> None:
         transport = FakeTransport(
             [

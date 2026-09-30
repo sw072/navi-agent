@@ -31,6 +31,7 @@ from ..models import (
 from ..operations import operation_arguments_hash
 from ..steps import capability_names, context_projection_hash, tool_schema_projection_hash
 from .prompt import PromptBuilder
+from .finalization import request_iteration_summary
 from .control import RunCancellationToken
 from .loop import AgentLoop, StopDecision
 from .model_invoker import ModelInvocation, ModelInvoker
@@ -1230,6 +1231,51 @@ class AgentRuntime:
             return finish_waiting(
                 loop_outcome.iteration,
                 loop_outcome.pending_result,
+            )
+
+        try:
+            final_iteration = self._max_iterations + 1
+            final_invocation = request_iteration_summary(
+                append_message=lambda message: self._session_store.append(session, message),
+                prepare=lambda: start_iteration(final_iteration),
+                invoke=lambda: self._model_invoker.invoke(
+                    messages=current_context_messages,
+                    tools=[],
+                    step_id=active_step_id,
+                    cancellation_requested=lambda: cancellation_token.is_cancelled,
+                    on_text_delta=lambda delta: publish_event(
+                        kind="delta", source="model", name="model.delta",
+                        iteration=final_iteration, item_id=f"model:{final_iteration}",
+                        payload={"delta": delta},
+                    ),
+                ),
+                record=lambda invocation: record_model_invocation(
+                    final_iteration, invocation, False
+                ),
+            )
+            if (
+                final_invocation is not None
+                and not final_invocation.response.tool_calls
+                and final_invocation.response.content.strip()
+            ):
+                result = RuntimeResult(
+                    session_id=session.session_id,
+                    status="success",
+                    final_response=final_invocation.response.content,
+                    run_id=run_id,
+                    messages=self._session_store.snapshot(session),
+                    tool_results=tool_results,
+                )
+                return finish_result(
+                    result,
+                    iteration=final_iteration,
+                    attempt_count=final_iteration,
+                )
+        except Exception:
+            logger.warning(
+                "Final summary after iteration limit failed: session_id=%s",
+                session_id,
+                exc_info=True,
             )
 
         logger.error("Runtime iteration limit exceeded: session_id=%s", session_id)
