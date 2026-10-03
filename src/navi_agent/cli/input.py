@@ -618,7 +618,12 @@ class InteractivePromptSession:
                     ("class:approval.reason", f"│ … {omitted} more lines · press v to expand\n")
                 )
         context = [
-            ("Scope", "this request only"),
+            (
+                "Scope",
+                "same request in this session"
+                if session_selected
+                else "this request only",
+            ),
             ("Working directory", working_directory),
             ("Environment", environment),
             ("Risk", risk),
@@ -630,7 +635,7 @@ class InteractivePromptSession:
                 for label, value in context
                 if value
             )
-        if detail:
+        if reason or detail:
             lines.append(("class:approval.border", "├ Reason\n"))
             lines.extend(
                 ("class:approval.reason", f"│ {line}\n")

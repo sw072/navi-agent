@@ -355,6 +355,7 @@ def test_approval_selection_can_choose_session_scope() -> None:
     fragments = session._render_approval()
     rendered = "".join(text for _style, text in fragments)
     assert "❯ Allow for session" in rendered
+    assert "Scope: same request in this session" in rendered
     allow_once = next(style for style, text in fragments if "Allow once" in text)
     session_allow = next(style for style, text in fragments if "Allow for session" in text)
     assert allow_once == "class:approval.option"
@@ -398,6 +399,25 @@ def test_approval_card_states_one_time_scope() -> None:
     )
     rendered = "".join(text for _style, text in session._render_approval())
     assert "Scope: this request only" in rendered
+
+
+def test_bash_approval_card_renders_reason_without_detail() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-reason",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+            reason="The command modifies files.",
+        )
+    )
+
+    rendered = "".join(text for _style, text in session._render_approval())
+    assert "├ Reason" in rendered
+    assert "│ The command modifies files." in rendered
 
 
 def test_approval_toolbar_shows_working_directory() -> None:
