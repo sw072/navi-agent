@@ -91,7 +91,7 @@ class JsonPendingInteractionStoreTests(unittest.TestCase):
                 )
             )
 
-    def test_session_approval_reuses_tool_permission(self) -> None:
+    def test_session_approval_reuses_matching_arguments_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             store = JsonPendingInteractionStore(Path(tmpdir) / "pending.json")
             request = ApprovalRequest(
@@ -111,8 +111,38 @@ class JsonPendingInteractionStoreTests(unittest.TestCase):
             )
 
         self.assertIsNotNone(first)
-        self.assertIsNotNone(second)
+        self.assertIsNone(second)
         self.assertEqual(first.approval_scope, "session")
+
+    def test_session_approval_can_be_revoked_after_consumption(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonPendingInteractionStore(Path(tmpdir) / "pending.json")
+            store.create(
+                session_id="s1",
+                user_id="u1",
+                kind="approval",
+                prompt="Approve?",
+                tool_name="bash",
+                arguments={"command": "pwd"},
+            )
+            store.resolve("s1", approved=True, scope="session")
+            self.assertIsNotNone(
+                store.consume_approval(
+                    session_id="s1",
+                    tool_name="bash",
+                    arguments={"command": "pwd"},
+                )
+            )
+
+            store.discard_approved("s1")
+
+            self.assertIsNone(
+                store.consume_approval(
+                    session_id="s1",
+                    tool_name="bash",
+                    arguments={"command": "pwd"},
+                )
+            )
 
     def test_resolved_interaction_is_claimed_only_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

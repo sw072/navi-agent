@@ -217,10 +217,7 @@ class JsonPendingInteractionStore:
                     if item.session_id == session_id
                     and item.status in {"approved", "granted"}
                     and item.tool_name == tool_name
-                    and (
-                        item.approval_scope == "session"
-                        or item.arguments == arguments
-                    )
+                    and item.arguments == arguments
                 ),
                 None,
             )
@@ -268,7 +265,10 @@ class JsonPendingInteractionStore:
             remaining = [
                 item
                 for item in items
-                if not (item.session_id == session_id and item.status == "approved")
+                if not (
+                    item.session_id == session_id
+                    and item.status in {"approved", "granted"}
+                )
             ]
             if len(remaining) != len(items):
                 self._save(remaining)
