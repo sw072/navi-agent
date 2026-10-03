@@ -1,5 +1,7 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import sys
+import threading
 from types import SimpleNamespace
 from types import ModuleType
 
@@ -83,6 +85,15 @@ class FakeTransport:
 
     def generate(self, request):
         return self.responses.pop(0)
+
+
+class ConcurrentFakeTransport:
+    def __init__(self, participants: int) -> None:
+        self._barrier = threading.Barrier(participants)
+
+    def generate(self, request):
+        self._barrier.wait(timeout=2)
+        return ModelResponse(content="Finished.")
 
 
 def test_swe_bench_prompt_requires_convergence_after_verified_patch() -> None:
@@ -196,6 +207,43 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatc
     assert events
     assert events[0].name == "runtime.started"
     assert events[-1].name == "runtime.completed"
+
+
+def test_inspect_runtime_runner_allows_concurrent_samples(monkeypatch) -> None:
+    trace_store = InMemoryTraceStore()
+    event_store = InMemoryRuntimeEventStore()
+    monkeypatch.setattr(
+        "evals.inspect.swe_bench.build_trace_store",
+        lambda config: trace_store,
+    )
+    monkeypatch.setattr(
+        "evals.inspect.swe_bench.JsonlRuntimeEventStore",
+        lambda path: event_store,
+    )
+
+    transport = ConcurrentFakeTransport(participants=2)
+    runner = InspectRuntimeRunner(transport=transport, model="fake-model")
+
+    def run(sample_id: str):
+        loop = asyncio.new_event_loop()
+        try:
+            bridge = InspectSandboxBridge(
+                loop=loop,
+                environment=FakeSandbox(),
+            )
+            return runner.run(
+                "Complete the task.",
+                sample_id=sample_id,
+                sandbox_bridge=bridge,
+            )
+        finally:
+            loop.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(run, ("sample-1", "sample-2")))
+
+    assert {result.status for result in results} == {"success"}
+    assert len({result.run_id for result in results}) == 2
 
 
 def test_builds_task_from_official_inspect_eval_components() -> None:
