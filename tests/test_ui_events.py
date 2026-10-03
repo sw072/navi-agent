@@ -49,6 +49,30 @@ def test_maps_tool_lifecycle_with_stable_item_identity() -> None:
     assert completed.title == "已读取文件"
 
 
+def test_maps_approval_context_for_review_card() -> None:
+    ui_event = UiEventMapper().map(
+        _event(
+            "tool.result",
+            {
+                "tool_name": "bash",
+                "structured_content": {
+                    "approval_required": True,
+                    "working_directory": "/workspace/project",
+                    "environment": "docker",
+                    "risk": "network",
+                    "reason": "命令会访问网络",
+                    "arguments": {"command": "curl https://example.com"},
+                },
+            },
+        )
+    )
+    assert ui_event is not None
+    assert ui_event.working_directory == "/workspace/project"
+    assert ui_event.environment == "docker"
+    assert ui_event.risk == "network"
+    assert ui_event.reason == "命令会访问网络"
+
+
 def test_redacts_and_truncates_tool_failure_detail() -> None:
     ui_event = UiEventMapper().map(
         _event(

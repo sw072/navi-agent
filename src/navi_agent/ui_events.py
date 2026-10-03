@@ -22,6 +22,10 @@ class UiEvent:
     item_id: str | None = None
     detail: str | None = None
     command: str | None = None
+    working_directory: str | None = None
+    environment: str | None = None
+    risk: str | None = None
+    reason: str | None = None
     severity: str = "info"
     replaceable: bool = False
     transient: bool = False
@@ -282,6 +286,10 @@ class UiEventMapper:
                 item_id=event.item_id,
                 detail=_approval_detail(tool_name, event.metadata),
                 command=_tool_command(tool_name, event.metadata),
+                working_directory=_approval_field(event.metadata, "working_directory"),
+                environment=_approval_field(event.metadata, "environment"),
+                risk=_approval_field(event.metadata, "risk"),
+                reason=_approval_field(event.metadata, "reason"),
                 severity="warning",
             )
         failed = event.metadata.get("status") == "error"
@@ -480,6 +488,15 @@ def _approval_detail(tool_name: str, metadata: dict[str, object]) -> str | None:
     if tool_name == "bash":
         return None
     return _tool_call_detail(tool_name, metadata)
+
+
+def _approval_field(metadata: dict[str, object], name: str) -> str | None:
+    structured = metadata.get("structured_content")
+    if isinstance(structured, dict):
+        value = structured.get(name)
+        if isinstance(value, str) and value.strip():
+            return _compact(_redact(value), limit=180)
+    return None
 
 
 def _tool_failure_title(tool_name: str, metadata: dict[str, object]) -> str:

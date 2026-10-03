@@ -112,6 +112,10 @@ class InteractivePromptSession:
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
+        self._approval_working_directory = ""
+        self._approval_environment = ""
+        self._approval_risk = ""
+        self._approval_reason = ""
         self._seen_event_ids: set[str] = set()
 
     def prompt(self, _message: Any = None, *, placeholder: str = "") -> str:
@@ -372,6 +376,10 @@ class InteractivePromptSession:
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
+        self._approval_working_directory = ""
+        self._approval_environment = ""
+        self._approval_risk = ""
+        self._approval_reason = ""
 
     def handle(self, event: UiEvent) -> None:
         history_line: str | None = None
@@ -401,6 +409,10 @@ class InteractivePromptSession:
                     self._approval_title = event.title
                     self._approval_detail = event.detail or ""
                     self._approval_command = event.command or ""
+                    self._approval_working_directory = event.working_directory or ""
+                    self._approval_environment = event.environment or ""
+                    self._approval_risk = event.risk or ""
+                    self._approval_reason = event.reason or ""
                 else:
                     history_line = render_ui_event(event)
             elif event.kind == "error" or event.state == "failed":
@@ -493,6 +505,10 @@ class InteractivePromptSession:
             title = self._approval_title
             detail = self._approval_detail
             command = self._approval_command
+            working_directory = self._approval_working_directory
+            environment = self._approval_environment
+            risk = self._approval_risk
+            reason = self._approval_reason
             approved = self._approval_selected
         lines = [
             ("class:approval.border", "┌ "),
@@ -506,11 +522,23 @@ class InteractivePromptSession:
                 ("class:approval.command", f"│   {line}\n")
                 for line in command_lines[1:]
             )
+        context = [
+            ("Working directory", working_directory),
+            ("Environment", environment),
+            ("Risk", risk),
+        ]
+        if any(value for _, value in context):
+            lines.append(("class:approval.border", "├ Context\n"))
+            lines.extend(
+                ("class:approval.reason", f"│ {label}: {value}\n")
+                for label, value in context
+                if value
+            )
         if detail:
             lines.append(("class:approval.border", "├ Reason\n"))
             lines.extend(
                 ("class:approval.reason", f"│ {line}\n")
-                for line in detail.splitlines()
+                for line in (reason or detail).splitlines()
             )
         lines.extend(
             [

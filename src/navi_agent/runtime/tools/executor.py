@@ -172,6 +172,21 @@ class ToolExecutor:
                                     "prompt": approval_decision.metadata.get("prompt"),
                                     "tool_name": tool_call.name,
                                     "arguments": tool_call.arguments,
+                                    "working_directory": (
+                                        context.environment.workspace_root
+                                        if context.environment is not None
+                                        else None
+                                    ),
+                                    "environment": (
+                                        context.environment.executor_kind
+                                        if context.environment is not None
+                                        else "host"
+                                    ),
+                                    "risk": approval_decision.metadata.get(
+                                        "risk_action",
+                                        decision.metadata.get("risk_action", "approval required"),
+                                    ),
+                                    "reason": decision.reason,
                                 },
                                 metadata=approval_decision.metadata or decision.metadata,
                             ).bind(tool_call.id),
