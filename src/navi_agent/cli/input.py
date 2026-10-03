@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from html import escape
 from threading import Lock
 from typing import Any
 
@@ -297,13 +298,7 @@ class InteractivePromptSession:
         )
         toolbar = Window(
             content=FormattedTextControl(
-                lambda: HTML(
-                    "<toolbar> ↑/↓ select · Enter confirm · v details · Esc deny </toolbar>"
-                    if self.approval_pending
-                    else "<toolbar> Agent running · /stop · /steer &lt;message&gt; </toolbar>"
-                    if self.is_busy
-                    else "<toolbar> Enter send · Shift+Enter newline · Ctrl-C quit </toolbar>"
-                )
+                lambda: HTML(self._toolbar_text())
             ),
             height=1,
             style="class:toolbar",
@@ -524,6 +519,23 @@ class InteractivePromptSession:
             status = self._status_text
             style = self._status_style
         return [(style, f"  {status}")] if status else []
+
+    def _toolbar_text(self) -> str:
+        if self.approval_pending:
+            with self._lock:
+                working_directory = self._approval_working_directory
+            directory = (
+                f" · cwd: {escape(working_directory)}"
+                if working_directory
+                else ""
+            )
+            return (
+                "<toolbar> ↑/↓ select · Enter confirm · v details · Esc deny"
+                f"{directory} </toolbar>"
+            )
+        if self.is_busy:
+            return "<toolbar> Agent running · /stop · /steer &lt;message&gt; </toolbar>"
+        return "<toolbar> Enter send · Shift+Enter newline · Ctrl-C quit </toolbar>"
 
     def _render_approval(self):
         with self._lock:

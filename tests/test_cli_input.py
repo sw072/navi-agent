@@ -377,6 +377,22 @@ def test_approval_card_states_one_time_scope() -> None:
     assert "Scope: this request only" in rendered
 
 
+def test_approval_toolbar_shows_working_directory() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-toolbar",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+            working_directory="/workspace/project",
+        )
+    )
+    assert "cwd: /workspace/project" in session._toolbar_text()
+
+
 def test_persistent_application_registers_vertical_approval_keys() -> None:
     with patch.object(Application, "run", autospec=True, return_value=None) as run:
         InteractivePromptSession().run(
