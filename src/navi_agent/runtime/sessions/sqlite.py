@@ -398,6 +398,37 @@ class SQLiteSessionStore:
 
         self._execute_write(start)
 
+    def resume_run(self, session: ConversationState, run_id: str) -> None:
+        def resume(connection: sqlite3.Connection) -> None:
+            row = connection.execute(
+                "SELECT session_id FROM runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
+            if row is None or row["session_id"] != session.session_id:
+                raise ValueError(f"run not found for resume: {run_id}")
+            now = time.time()
+            connection.execute(
+                """
+                UPDATE runs
+                SET status = 'running',
+                    updated_at = ?,
+                    completed_at = NULL,
+                    completion_reason = NULL
+                WHERE id = ? AND session_id = ?
+                """,
+                (now, run_id, session.session_id),
+            )
+            connection.execute(
+                """
+                UPDATE sessions
+                SET updated_at = ?, ended_at = NULL, end_reason = NULL
+                WHERE id = ?
+                """,
+                (now, session.session_id),
+            )
+
+        self._execute_write(resume)
+
     def get_run(self, run_id: str) -> RuntimeRunRecord | None:
         with self._connect() as connection:
             row = connection.execute(

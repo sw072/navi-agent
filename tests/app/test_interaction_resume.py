@@ -17,6 +17,7 @@ from navi_agent.runtime import (
     ToolRegistry,
     ToolResult,
 )
+from navi_agent.telemetry import InMemoryRuntimeEventStore, InMemoryTraceStore
 from navi_agent.runtime.tools.policy import SensitiveToolPolicy
 from navi_agent.tools import AskUserTool
 
@@ -60,9 +61,13 @@ def test_approval_executes_checkpoint_without_model_retry() -> None:
             ]
         )
         session_store = InMemorySessionStore()
+        trace_store = InMemoryTraceStore()
+        event_store = InMemoryRuntimeEventStore()
         runtime = AgentRuntime(
             transport=transport,
             session_store=session_store,
+            trace_store=trace_store,
+            event_store=event_store,
             tool_registry=ToolRegistry(
                 tools={"guarded": guarded},
                 policy=SensitiveToolPolicy(
@@ -89,6 +94,8 @@ def test_approval_executes_checkpoint_without_model_retry() -> None:
 
     assert waiting.status == "awaiting_input"
     assert resumed.status == "success"
+    assert resumed.run_id == waiting.run_id
+    assert session_store.get_run(resumed.run_id).task_spec.objective == "run"
     assert executions == ["once"]
     completed_operation = session_store.get_operation(operation.operation_id)
     assert completed_operation is not None
@@ -96,6 +103,11 @@ def test_approval_executes_checkpoint_without_model_retry() -> None:
     assert len(transport.calls) == 2
     assert service.resolve_interaction("s1", approved=True) is None
     assert [message.role for message in resumed.messages[-2:]] == ["tool", "assistant"]
+    assert len(trace_store.traces) == 1
+    assert trace_store.traces[0].trace_id == waiting.run_id
+    assert trace_store.traces[0].user_message == "run"
+    events = event_store.list_events(run_id=waiting.run_id)
+    assert len({event.sequence for event in events}) == len(events)
 
 
 def test_approval_rejects_a_forged_tool_call_checkpoint() -> None:

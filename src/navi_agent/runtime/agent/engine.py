@@ -237,6 +237,7 @@ class AgentRuntime:
         self._prompt_builder = prompt_builder or PromptBuilder()
         self._trace_store = trace_store
         self._event_publisher = RuntimeEventPublisher(event_subscribers or ())
+        self._event_store = event_store
         self._tool_result_renderer = tool_result_renderer or DefaultToolResultRenderer()
         self._context_engine = context_engine or ContextEngine(summarizer=LLMContextSummarizer(transport))
         self._enabled_toolsets = enabled_toolsets
@@ -362,10 +363,25 @@ class AgentRuntime:
         cancellation_token = cancellation_token or RunCancellationToken()
         run_started_at = _utc_now_iso()
         run_started_perf = perf_counter()
-        run_id = uuid4().hex
-        task_spec = task_spec or TaskSpec(objective=user_message)
+        checkpoint_run_id = (
+            resume_interaction.run_id if resume_interaction is not None else None
+        )
+        run_id = checkpoint_run_id or uuid4().hex
+        existing_run = self._session_store.get_run(run_id) if checkpoint_run_id else None
+        if checkpoint_run_id and existing_run is None:
+            raise ValueError(f"pending interaction run not found: {checkpoint_run_id}")
+        task_spec = task_spec or (
+            existing_run.task_spec
+            if existing_run is not None and existing_run.task_spec is not None
+            else TaskSpec(objective=user_message)
+        )
         update_log_context(run_id=run_id)
         event_sequence = 0
+        if checkpoint_run_id and self._event_store is not None:
+            event_sequence = max(
+                (event.sequence for event in self._event_store.list_events(run_id=run_id)),
+                default=0,
+            )
         event_publish_lock = Lock()
         request_publisher = RuntimeEventPublisher(event_subscribers or ())
         critical_event_failures = []
@@ -440,7 +456,10 @@ class AgentRuntime:
             user_id=user_id,
             metadata=session_metadata,
         )
-        self._session_store.start_run(session, run_id, session_metadata)
+        if existing_run is None:
+            self._session_store.start_run(session, run_id, session_metadata)
+        else:
+            self._session_store.resume_run(session, run_id)
 
         def inject_background_notifications(iteration: int) -> None:
             if self._background_task_manager is None:
