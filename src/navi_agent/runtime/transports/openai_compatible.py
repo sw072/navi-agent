@@ -245,6 +245,23 @@ class OpenAICompatibleTransport:
         """Drop tool messages that cannot be accepted by Chat Completions."""
         result: list[dict[str, Any]] = []
         pending_ids: set[str] = set()
+        pending_assistant_index: int | None = None
+
+        def discard_unanswered_calls() -> None:
+            nonlocal pending_assistant_index
+            if not pending_ids or pending_assistant_index is None:
+                return
+            assistant = result[pending_assistant_index]
+            calls = assistant.get("tool_calls", [])
+            completed_calls = [
+                call for call in calls if call.get("id") not in pending_ids
+            ]
+            if completed_calls:
+                assistant["tool_calls"] = completed_calls
+            else:
+                assistant.pop("tool_calls", None)
+            pending_assistant_index = None
+
         for message in messages:
             role = message.get("role")
             if role == "tool":
@@ -254,7 +271,9 @@ class OpenAICompatibleTransport:
                     pending_ids.remove(tool_call_id)
                 continue
             if pending_ids:
+                discard_unanswered_calls()
                 pending_ids.clear()
+            pending_assistant_index = None
             result.append(message)
             if role == "assistant":
                 pending_ids = {
@@ -262,6 +281,10 @@ class OpenAICompatibleTransport:
                     for tool_call in message.get("tool_calls", [])
                     if tool_call.get("id")
                 }
+                if pending_ids:
+                    pending_assistant_index = len(result) - 1
+        if pending_ids:
+            discard_unanswered_calls()
         return result
 
     @staticmethod
