@@ -2217,6 +2217,9 @@ def _run_persistent_interactive(
                 prompt_session.show_notice("Stopping current task before exit…")
             else:
                 _drain_background_reviews(app)
+                prompt_session.show_notice(
+                    f"Session saved · use /resume {current_session_id} to continue."
+                )
                 prompt_session.exit()
             return
         if slash_command is not None and slash_command.name == "/help":
