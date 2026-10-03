@@ -190,7 +190,7 @@ class JsonPendingInteractionStore:
                     item
                     for item in items
                     if item.session_id == session_id
-                    and item.status == "approved"
+                    and item.status in {"approved", "granted"}
                     and item.tool_name == tool_name
                     and (
                         item.approval_scope == "session"
@@ -202,6 +202,12 @@ class JsonPendingInteractionStore:
             if target is not None:
                 if target.approval_scope != "session":
                     items.remove(target)
+                else:
+                    items.remove(target)
+                    target = PendingInteraction(
+                        **{**asdict(target), "status": "granted"}
+                    )
+                    items.append(target)
                 self._save(items)
             return target
 
