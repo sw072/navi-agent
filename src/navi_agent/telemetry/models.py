@@ -55,6 +55,8 @@ class RuntimeTrace:
     user_message: str
     final_response: str
     status: str
+    completion_verified: bool | None = None
+    completion_reason: str | None = None
     trace_id: str = field(default_factory=lambda: uuid4().hex)
     agent_role: str = "primary"
     parent_session_id: str | None = None

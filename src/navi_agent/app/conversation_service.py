@@ -19,6 +19,7 @@ from navi_agent.runtime import (
     RuntimeResult,
     RuntimeRunState,
     RunStateTracker,
+    TaskSpec,
 )
 
 
@@ -30,6 +31,7 @@ class AppRequest:
     system_prompt: str | None = None
     mode: RuntimeMode = RuntimeMode.ONLINE
     source: str = "console"
+    task_spec: TaskSpec | None = None
 
 
 class ConversationService:
@@ -81,16 +83,21 @@ class ConversationService:
             self._before_online_run(session_id, request.user_id)
         cancellation_token = self._active_runs.start(session_id)
         try:
+            runtime_kwargs = {
+                "session_id": session_id,
+                "user_id": request.user_id,
+                "user_message": request.message,
+                "system_prompt": system_prompt,
+                "source": request.source,
+                "mode": request.mode,
+                "event_subscribers": [self._run_states, *(event_subscribers or [])],
+                "cancellation_token": cancellation_token,
+                "resume_interaction": resume_interaction,
+            }
+            if request.task_spec is not None:
+                runtime_kwargs["task_spec"] = request.task_spec
             result = self._runtime.run_conversation(
-                session_id=session_id,
-                user_id=request.user_id,
-                user_message=request.message,
-                system_prompt=system_prompt,
-                source=request.source,
-                mode=request.mode,
-                event_subscribers=[self._run_states, *(event_subscribers or [])],
-                cancellation_token=cancellation_token,
-                resume_interaction=resume_interaction,
+                **runtime_kwargs,
             )
         finally:
             self._active_runs.finish(session_id, cancellation_token)

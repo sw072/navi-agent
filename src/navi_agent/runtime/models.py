@@ -58,6 +58,19 @@ class ConversationState:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskSpec:
+    """Run-scoped task intent and the optional evidence required to finish it."""
+
+    objective: str
+    acceptance: tuple[str, ...] = ()
+    constraints: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.objective.strip():
+            raise ValueError("task objective must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
 class SessionMetadata:
     source: str = "console"
     agent_role: str = "primary"
@@ -65,6 +78,7 @@ class SessionMetadata:
     model: str | None = None
     cwd: str | None = None
     environment_id: str | None = None
+    task_spec: TaskSpec | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +99,7 @@ class RuntimeRunRecord:
     started_at: float
     updated_at: float
     environment_id: str | None = None
+    task_spec: TaskSpec | None = None
     completed_at: float | None = None
     start_message_id: int | None = None
     end_message_id: int | None = None
@@ -204,6 +219,9 @@ class RuntimeResult:
     status: str
     final_response: str
     run_id: str = ""
+    task_spec: TaskSpec | None = None
+    completion_verified: bool | None = None
+    completion_reason: str | None = None
     messages: list[Message] = field(default_factory=list)
     tool_results: list[ToolResult] = field(default_factory=list)
     trajectory_complete: bool = True
