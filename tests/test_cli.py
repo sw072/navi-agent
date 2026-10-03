@@ -1774,7 +1774,7 @@ class CliTests(unittest.TestCase):
                 action = "approved" if approved else "denied"
                 self.assertIn(f"{action} the tool bash", app.calls[0].message)
                 if approved:
-                    self.assertNotIn("✓ 已授权 · bash", prompt.notices)
+                    self.assertIn("✓ 已批准 · bash · 正在恢复任务…", prompt.notices)
                 else:
                     self.assertIn("■ 已拒绝 · bash", prompt.notices)
 
