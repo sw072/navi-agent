@@ -314,7 +314,7 @@ class InspectSandboxBridge:
         return f"{value[: self._max_output_chars].strip()}\n...<truncated>"
 
 
-class SWEBenchInspectRunner:
+class InspectRuntimeRunner:
     def __init__(
         self,
         *,
@@ -387,11 +387,11 @@ class SWEBenchInspectRunner:
             )
 
 
-def build_swe_bench_runner() -> SWEBenchInspectRunner:
+def build_inspect_runtime_runner() -> InspectRuntimeRunner:
     config = load_config()
     model_settings = ModelSettings.from_sources(config)
     runtime_settings = RuntimeSettings.from_sources(config)
-    return SWEBenchInspectRunner(
+    return InspectRuntimeRunner(
         transport=build_transport(model_settings),
         model=model_settings.model,
         max_iterations=runtime_settings.max_iterations,
@@ -399,7 +399,7 @@ def build_swe_bench_runner() -> SWEBenchInspectRunner:
 
 
 @solver
-def swe_bench_solver(runner: SWEBenchInspectRunner):
+def swe_bench_solver(runner: InspectRuntimeRunner):
     async def solve(state: TaskState, generate):
         loop = asyncio.get_running_loop()
         result = await asyncio.to_thread(
@@ -447,7 +447,7 @@ def _official_swe_bench_task() -> Task:
 
 @task
 def navi_swe_bench_verified(
-    runner: SWEBenchInspectRunner | None = None,
+    runner: InspectRuntimeRunner | None = None,
     *,
     official_task_factory: Callable[[], Task] = _official_swe_bench_task,
 ) -> Task:
@@ -457,7 +457,7 @@ def navi_swe_bench_verified(
         name="navi-swe-bench-verified",
         location=SWE_BENCH_DATASET,
     )
-    benchmark.solver = swe_bench_solver(runner or build_swe_bench_runner())
+    benchmark.solver = swe_bench_solver(runner or build_inspect_runtime_runner())
     benchmark.scorer = [
         *(list(benchmark.scorer) if benchmark.scorer else []),
         navi_runtime_success(),

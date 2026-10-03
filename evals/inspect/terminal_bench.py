@@ -11,8 +11,8 @@ from inspect_ai.util import sandbox
 from evals.inspect.adapter import navi_runtime_success
 from evals.inspect.swe_bench import (
     InspectSandboxBridge,
-    SWEBenchInspectRunner,
-    build_swe_bench_runner,
+    InspectRuntimeRunner,
+    build_inspect_runtime_runner,
 )
 
 
@@ -32,7 +32,7 @@ def _sandbox_env_name() -> str:
 
 
 @solver
-def terminal_bench_solver(runner: SWEBenchInspectRunner):
+def terminal_bench_solver(runner: InspectRuntimeRunner):
     async def solve(state: TaskState, generate):
         loop = asyncio.get_running_loop()
         result = await asyncio.to_thread(
@@ -75,7 +75,7 @@ def _terminal_bench_task(
 
 @task
 def navi_terminal_bench_2_1(
-    runner: SWEBenchInspectRunner | None = None,
+    runner: InspectRuntimeRunner | None = None,
     *,
     n_tasks: int | None = None,
     dataset_task_names: list[str] | None = None,
@@ -84,7 +84,7 @@ def navi_terminal_bench_2_1(
         n_tasks=n_tasks,
         dataset_task_names=dataset_task_names,
     )
-    benchmark.solver = terminal_bench_solver(runner or build_swe_bench_runner())
+    benchmark.solver = terminal_bench_solver(runner or build_inspect_runtime_runner())
     benchmark.scorer = [
         *(list(benchmark.scorer) if benchmark.scorer else []),
         navi_runtime_success(),

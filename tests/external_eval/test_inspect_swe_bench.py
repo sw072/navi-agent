@@ -13,7 +13,7 @@ from evals.inspect.swe_bench import (
     SWE_BENCH_SYSTEM_PROMPT,
     _swe_bench_convergence_policy,
     InspectSandboxBridge,
-    SWEBenchInspectRunner,
+    InspectRuntimeRunner,
     navi_swe_bench_verified,
     _official_swe_bench_task,
     select_swe_bench_samples,
@@ -151,7 +151,7 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatc
             environment=environment,
         )
         registry = bridge.tool_registry()
-        runner = SWEBenchInspectRunner(
+        runner = InspectRuntimeRunner(
             transport=FakeTransport(),
             model="fake-model",
         )
@@ -200,7 +200,7 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatc
 
 def test_builds_task_from_official_inspect_eval_components() -> None:
     task = navi_swe_bench_verified(
-        runner=SWEBenchInspectRunner(
+        runner=InspectRuntimeRunner(
             transport=FakeTransport(),
             model="fake-model",
         ),
