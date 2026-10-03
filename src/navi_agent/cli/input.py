@@ -23,7 +23,11 @@ INTERACTIVE_STYLE = {
     "event.success": "ansigreen bold",
     "event.warning": "ansiyellow bold",
     "approval.option": "",
-    "approval.selected": "ansiyellow bold",
+    "approval.selected": "ansicyan bold",
+    "approval.border": "ansibrightblack",
+    "approval.heading": "ansiyellow bold",
+    "approval.command": "",
+    "approval.reason": "ansibrightblack",
     "frame.border": "ansibrightblack",
     "input": "",
     "placeholder": "ansibrightblack italic",
@@ -104,7 +108,7 @@ class InteractivePromptSession:
         self._response_text = ""
         self._busy = False
         self._approval_pending = False
-        self._approval_selected = True
+        self._approval_selected = False
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
@@ -221,6 +225,13 @@ class InteractivePromptSession:
             submit_message()
 
         approval_active = Condition(lambda: self.approval_pending)
+
+        @bindings.add("escape", filter=approval_active)
+        def deny_approval(_event):
+            self.select_approval(False)
+            approved = self.consume_approval_selection()
+            if approved is not None and on_approval is not None:
+                on_approval(approved)
 
         @bindings.add("up", filter=approval_active)
         def select_allow(_event):
@@ -357,7 +368,7 @@ class InteractivePromptSession:
 
     def _clear_approval_locked(self) -> None:
         self._approval_pending = False
-        self._approval_selected = True
+        self._approval_selected = False
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
@@ -386,7 +397,7 @@ class InteractivePromptSession:
                 self._status_style = _event_style(event) or "class:status"
                 if event.kind == "approval":
                     self._approval_pending = True
-                    self._approval_selected = True
+                    self._approval_selected = False
                     self._approval_title = event.title
                     self._approval_detail = event.detail or ""
                     self._approval_command = event.command or ""
@@ -484,27 +495,35 @@ class InteractivePromptSession:
             command = self._approval_command
             approved = self._approval_selected
         lines = [
-            ("class:event.warning", f"! {title}\n"),
+            ("class:approval.border", "┌ "),
+            ("class:approval.heading", f"{title}\n"),
+            ("class:approval.border", "├ Operation\n"),
         ]
         if command:
             command_lines = command.splitlines()
-            lines.append(("class:event.output", f"  $ {command_lines[0]}\n"))
+            lines.append(("class:approval.command", f"│ $ {command_lines[0]}\n"))
             lines.extend(
-                ("class:event.output", f"    {line}\n")
+                ("class:approval.command", f"│   {line}\n")
                 for line in command_lines[1:]
             )
         if detail:
-            lines.append(("class:event.output", f"  {detail}\n"))
+            lines.append(("class:approval.border", "├ Reason\n"))
+            lines.extend(
+                ("class:approval.reason", f"│ {line}\n")
+                for line in detail.splitlines()
+            )
         lines.extend(
             [
+                ("class:approval.border", "│\n"),
                 (
                     "class:approval.selected" if approved else "class:approval.option",
-                    f"  {'❯' if approved else ' '} Allow\n",
+                    f"│ {'❯' if approved else ' '} Allow once\n",
                 ),
                 (
                     "class:approval.selected" if not approved else "class:approval.option",
-                    f"  {'❯' if not approved else ' '} Deny",
+                    f"│ {'❯' if not approved else ' '} Deny\n",
                 ),
+                ("class:approval.border", "└ ↑/↓ select · Enter confirm · Esc deny"),
             ]
         )
         return lines

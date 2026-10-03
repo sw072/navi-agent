@@ -253,10 +253,10 @@ def test_approval_event_renders_inline_vertical_choices() -> None:
 
     rendered = session._render_approval()
     text = "".join(fragment for _style, fragment in rendered)
-    assert "! Approval required · Bash" in text
+    assert "Approval required · Bash" in text
     assert "$ uv run pytest" in text
-    assert "❯ Allow" in text
-    assert "  Deny" in text
+    assert "  Allow once" in text
+    assert "❯ Deny" in text
     assert "/approve" not in text
 
 
@@ -276,9 +276,9 @@ def test_approval_event_renders_complete_multiline_command() -> None:
     )
 
     text = "".join(fragment for _style, fragment in session._render_approval())
-    assert "  $ python - <<'PY'" in text
-    assert "    print('hello')" in text
-    assert "    PY" in text
+    assert "│ $ python - <<'PY'" in text
+    assert "│   print('hello')" in text
+    assert "│   PY" in text
 
 
 def test_prompt_toolkit_measures_wrapped_approval_choices() -> None:
@@ -303,7 +303,7 @@ def test_prompt_toolkit_measures_wrapped_approval_choices() -> None:
         get_line_prefix=None,
     )
 
-    assert height == 7
+    assert height == 11
 
 
 def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None:
@@ -319,7 +319,7 @@ def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None
         )
     )
 
-    assert session.consume_approval_selection() is True
+    assert session.consume_approval_selection() is False
 
     session.handle(
         UiEvent(
@@ -350,6 +350,7 @@ def test_persistent_application_registers_vertical_approval_keys() -> None:
     assert application.key_bindings.get_bindings_for_keys((Keys.Up,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Down,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Enter,))
+    assert application.key_bindings.get_bindings_for_keys((Keys.Escape,))
 
 
 def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:
