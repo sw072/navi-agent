@@ -640,7 +640,7 @@ class InteractivePromptSession:
             [
                 ("class:approval.border", "│\n"),
                 (
-                    "class:approval.selected" if approved else "class:approval.option",
+                    "class:approval.selected" if approved and not session_selected else "class:approval.option",
                     f"│ {'❯' if approved and not session_selected else ' '} Allow once\n",
                 ),
                 (

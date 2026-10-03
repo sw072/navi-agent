@@ -352,8 +352,13 @@ def test_approval_selection_can_choose_session_scope() -> None:
         )
     )
     session.move_approval_selection(1)
-    rendered = "".join(text for _style, text in session._render_approval())
+    fragments = session._render_approval()
+    rendered = "".join(text for _style, text in fragments)
     assert "❯ Allow for session" in rendered
+    allow_once = next(style for style, text in fragments if "Allow once" in text)
+    session_allow = next(style for style, text in fragments if "Allow for session" in text)
+    assert allow_once == "class:approval.option"
+    assert session_allow == "class:approval.selected"
     assert session.consume_approval_choice() == "session"
 
 
