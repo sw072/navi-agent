@@ -2314,9 +2314,9 @@ def _run_persistent_interactive(
         action = "approved" if approved else "denied"
         tool_label = interaction.tool_name or "tool"
         prompt_session.show_notice(
-            f"✓ 已批准 · {tool_label} · 正在恢复任务…"
+            f"✓ Approved · {tool_label} · resuming…"
             if approved
-            else f"■ 已拒绝 · {tool_label}"
+            else f"■ Denied · {tool_label}"
         )
         instruction = (
             f"The user {action} the tool {interaction.tool_name}. "
