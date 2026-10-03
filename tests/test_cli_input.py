@@ -393,6 +393,11 @@ def test_approval_toolbar_shows_working_directory() -> None:
     assert "cwd: /workspace/project" in session._toolbar_text()
 
 
+def test_toolbar_always_shows_current_working_directory() -> None:
+    session = InteractivePromptSession()
+    assert "cwd: " in session._toolbar_text()
+
+
 def test_persistent_application_registers_vertical_approval_keys() -> None:
     with patch.object(Application, "run", autospec=True, return_value=None) as run:
         InteractivePromptSession().run(

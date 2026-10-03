@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from html import escape
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -104,6 +105,7 @@ class InteractivePromptSession:
         self._history = InMemoryHistory()
         self._lock = Lock()
         self._application = None
+        self._working_directory = str(Path.cwd())
         self._status_text = ""
         self._status_style = "class:status"
         self._response_text = ""
@@ -521,21 +523,17 @@ class InteractivePromptSession:
         return [(style, f"  {status}")] if status else []
 
     def _toolbar_text(self) -> str:
+        with self._lock:
+            working_directory = self._approval_working_directory or self._working_directory
+        directory = f" · cwd: {escape(working_directory)}"
         if self.approval_pending:
-            with self._lock:
-                working_directory = self._approval_working_directory
-            directory = (
-                f" · cwd: {escape(working_directory)}"
-                if working_directory
-                else ""
-            )
             return (
                 "<toolbar> ↑/↓ select · Enter confirm · v details · Esc deny"
                 f"{directory} </toolbar>"
             )
         if self.is_busy:
-            return "<toolbar> Agent running · /stop · /steer &lt;message&gt; </toolbar>"
-        return "<toolbar> Enter send · Shift+Enter newline · Ctrl-C quit </toolbar>"
+            return f"<toolbar> Agent running · /stop · /steer &lt;message&gt;{directory} </toolbar>"
+        return f"<toolbar> Enter send · Shift+Enter newline · Ctrl-C quit{directory} </toolbar>"
 
     def _render_approval(self):
         with self._lock:
