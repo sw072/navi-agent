@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import Awaitable, Callable
 import os
 import re
-from threading import Lock
 from typing import Any, TypeVar
 from uuid import uuid4
 
@@ -314,7 +313,7 @@ class InspectSandboxBridge:
         return f"{value[: self._max_output_chars].strip()}\n...<truncated>"
 
 
-class SWEBenchInspectRunner:
+class InspectRuntimeRunner:
     def __init__(
         self,
         *,
@@ -325,7 +324,8 @@ class SWEBenchInspectRunner:
         self._transport = transport
         self._model = model
         self._max_iterations = max_iterations
-        self._lock = Lock()
+        self._trace_store = build_trace_store(load_config())
+        self._event_store = JsonlRuntimeEventStore(get_runtime_event_store_path())
 
     def run(
         self,
@@ -336,62 +336,59 @@ class SWEBenchInspectRunner:
         suite: str = "swe-bench-verified",
         system_prompt: str = SWE_BENCH_SYSTEM_PROMPT,
     ) -> NaviInspectResult:
-        with self._lock:
-            trace_store = build_trace_store(load_config())
-            event_store = JsonlRuntimeEventStore(get_runtime_event_store_path())
-            runtime = AgentRuntime(
-                transport=self._transport,
-                tool_registry=sandbox_bridge.tool_registry(),
-                session_store=InMemorySessionStore(),
-                trace_store=trace_store,
-                event_store=event_store,
-                max_iterations=self._max_iterations,
-                model=self._model,
-                convergence_policy=_swe_bench_convergence_policy(),
-            )
-            app = ApplicationService(runtime)
-            session_id = f"inspect:{suite}:{sample_id}:{uuid4().hex[:8]}"
-            user_id = f"inspect-{suite}"
-            result = app.handle(
-                AppRequest(
-                    session_id=session_id,
-                    user_id=user_id,
-                    message=prompt,
-                    system_prompt=system_prompt,
-                    source="inspect",
-                    mode=RuntimeMode.EVAL,
-                )
-            )
-            trace = app.get_latest_trace(session_id=session_id, user_id=user_id)
-            if trace is None:
-                raise RuntimeError(f"Navi runtime did not record a trace for {sample_id}")
-            return NaviInspectResult(
+        runtime = AgentRuntime(
+            transport=self._transport,
+            tool_registry=sandbox_bridge.tool_registry(),
+            session_store=InMemorySessionStore(),
+            trace_store=self._trace_store,
+            event_store=self._event_store,
+            max_iterations=self._max_iterations,
+            model=self._model,
+            convergence_policy=_swe_bench_convergence_policy(),
+        )
+        app = ApplicationService(runtime)
+        session_id = f"inspect:{suite}:{sample_id}:{uuid4().hex[:8]}"
+        user_id = f"inspect-{suite}"
+        result = app.handle(
+            AppRequest(
                 session_id=session_id,
-                run_id=result.run_id,
-                trace_id=trace.trace_id,
-                status=result.status,
-                completion=result.final_response,
-                iterations=trace.total_iterations,
-                duration_ms=trace.duration_ms,
-                input_tokens=sum(call.input_tokens for call in trace.model_calls),
-                output_tokens=sum(call.output_tokens for call in trace.model_calls),
-                cost_usd=sum(call.cost_usd or 0.0 for call in trace.model_calls),
-                tool_calls=tuple(
-                    {
-                        "name": execution.tool_name,
-                        "arguments": execution.arguments,
-                        "status": execution.status,
-                    }
-                    for execution in trace.tool_executions
-                ),
+                user_id=user_id,
+                message=prompt,
+                system_prompt=system_prompt,
+                source="inspect",
+                mode=RuntimeMode.EVAL,
             )
+        )
+        trace = app.get_latest_trace(session_id=session_id, user_id=user_id)
+        if trace is None:
+            raise RuntimeError(f"Navi runtime did not record a trace for {sample_id}")
+        return NaviInspectResult(
+            session_id=session_id,
+            run_id=result.run_id,
+            trace_id=trace.trace_id,
+            status=result.status,
+            completion=result.final_response,
+            iterations=trace.total_iterations,
+            duration_ms=trace.duration_ms,
+            input_tokens=sum(call.input_tokens for call in trace.model_calls),
+            output_tokens=sum(call.output_tokens for call in trace.model_calls),
+            cost_usd=sum(call.cost_usd or 0.0 for call in trace.model_calls),
+            tool_calls=tuple(
+                {
+                    "name": execution.tool_name,
+                    "arguments": execution.arguments,
+                    "status": execution.status,
+                }
+                for execution in trace.tool_executions
+            ),
+        )
 
 
-def build_swe_bench_runner() -> SWEBenchInspectRunner:
+def build_inspect_runtime_runner() -> InspectRuntimeRunner:
     config = load_config()
     model_settings = ModelSettings.from_sources(config)
     runtime_settings = RuntimeSettings.from_sources(config)
-    return SWEBenchInspectRunner(
+    return InspectRuntimeRunner(
         transport=build_transport(model_settings),
         model=model_settings.model,
         max_iterations=runtime_settings.max_iterations,
@@ -399,7 +396,7 @@ def build_swe_bench_runner() -> SWEBenchInspectRunner:
 
 
 @solver
-def swe_bench_solver(runner: SWEBenchInspectRunner):
+def swe_bench_solver(runner: InspectRuntimeRunner):
     async def solve(state: TaskState, generate):
         loop = asyncio.get_running_loop()
         result = await asyncio.to_thread(
@@ -447,7 +444,7 @@ def _official_swe_bench_task() -> Task:
 
 @task
 def navi_swe_bench_verified(
-    runner: SWEBenchInspectRunner | None = None,
+    runner: InspectRuntimeRunner | None = None,
     *,
     official_task_factory: Callable[[], Task] = _official_swe_bench_task,
 ) -> Task:
@@ -457,7 +454,7 @@ def navi_swe_bench_verified(
         name="navi-swe-bench-verified",
         location=SWE_BENCH_DATASET,
     )
-    benchmark.solver = swe_bench_solver(runner or build_swe_bench_runner())
+    benchmark.solver = swe_bench_solver(runner or build_inspect_runtime_runner())
     benchmark.scorer = [
         *(list(benchmark.scorer) if benchmark.scorer else []),
         navi_runtime_success(),
