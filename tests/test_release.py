@@ -14,4 +14,4 @@ def test_release_version_accepts_matching_tag() -> None:
 
 
 def test_release_version_rejects_mismatched_tag() -> None:
-    assert main("v0.2.0") == 1
+    assert main("v0.0.0") == 1
