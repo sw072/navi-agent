@@ -339,6 +339,24 @@ def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None
     assert session.consume_approval_selection() is None
 
 
+def test_approval_selection_can_choose_session_scope() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-session",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+        )
+    )
+    session.move_approval_selection(1)
+    rendered = "".join(text for _style, text in session._render_approval())
+    assert "❯ Allow for session" in rendered
+    assert session.consume_approval_choice() == "session"
+
+
 def test_long_approval_command_is_collapsed_until_expanded() -> None:
     session = InteractivePromptSession()
     session.handle(
@@ -454,7 +472,7 @@ def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:
             deadline = time.monotonic() + 2
             while session._application is None and time.monotonic() < deadline:
                 time.sleep(0.01)
-            pipe_input.send_text("\x1b[B\r")
+            pipe_input.send_text("\x1b[B\x1b[B\r")
             assert completed.wait(timeout=2)
             worker.join(timeout=2)
 

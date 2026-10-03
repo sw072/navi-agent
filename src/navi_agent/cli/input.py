@@ -244,11 +244,11 @@ class InteractivePromptSession:
 
         @bindings.add("up", filter=approval_active)
         def select_allow(_event):
-            self.select_approval(True)
+            self.move_approval_selection(-1)
 
         @bindings.add("down", filter=approval_active)
         def select_deny(_event):
-            self.select_approval(False)
+            self.move_approval_selection(1)
 
         @bindings.add("left", filter=approval_active)
         def select_allow_once(_event):
@@ -388,6 +388,22 @@ class InteractivePromptSession:
                 return
             self._approval_selected = True
             self._approval_session_selected = True
+        self.invalidate()
+
+    def move_approval_selection(self, delta: int) -> None:
+        with self._lock:
+            if not self._approval_pending:
+                return
+            current = (
+                1
+                if self._approval_session_selected
+                else 0
+                if self._approval_selected
+                else 2
+            )
+            selected = (current + delta) % 3
+            self._approval_selected = selected != 2
+            self._approval_session_selected = selected == 1
         self.invalidate()
 
     def toggle_approval_command(self) -> None:
