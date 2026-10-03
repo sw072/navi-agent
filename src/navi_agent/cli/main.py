@@ -2312,11 +2312,14 @@ def _run_persistent_interactive(
     def resolve_approval(choice: bool | str) -> None:
         scope = choice if isinstance(choice, str) else "once"
         approved = choice != "deny" if isinstance(choice, str) else choice
-        interaction = app.resolve_interaction(
-            current_session_id,
-            approved=approved,
-            scope=scope if approved else "once",
-        )
+        if scope == "once":
+            interaction = app.resolve_interaction(current_session_id, approved=approved)
+        else:
+            interaction = app.resolve_interaction(
+                current_session_id,
+                approved=approved,
+                scope=scope,
+            )
         if interaction is None or interaction.kind != "approval":
             prompt_session.show_notice("No approval request is waiting.")
             return
