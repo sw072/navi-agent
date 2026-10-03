@@ -116,6 +116,7 @@ class InteractivePromptSession:
         self._approval_environment = ""
         self._approval_risk = ""
         self._approval_reason = ""
+        self._approval_expanded = False
         self._seen_event_ids: set[str] = set()
 
     def prompt(self, _message: Any = None, *, placeholder: str = "") -> str:
@@ -245,6 +246,10 @@ class InteractivePromptSession:
         def select_deny(_event):
             self.select_approval(False)
 
+        @bindings.add("v", filter=approval_active)
+        def toggle_approval_command(_event):
+            self.toggle_approval_command()
+
         @bindings.add("f24")
         def newline(event):
             event.current_buffer.insert_text("\n")
@@ -279,7 +284,7 @@ class InteractivePromptSession:
         toolbar = Window(
             content=FormattedTextControl(
                 lambda: HTML(
-                    "<toolbar> ↑/↓ select · Enter confirm </toolbar>"
+                    "<toolbar> ↑/↓ select · Enter confirm · v details · Esc deny </toolbar>"
                     if self.approval_pending
                     else "<toolbar> Agent running · /stop · /steer &lt;message&gt; </toolbar>"
                     if self.is_busy
@@ -356,6 +361,13 @@ class InteractivePromptSession:
             self._approval_selected = approved
         self.invalidate()
 
+    def toggle_approval_command(self) -> None:
+        with self._lock:
+            if not self._approval_pending:
+                return
+            self._approval_expanded = not self._approval_expanded
+        self.invalidate()
+
     def consume_approval_selection(self) -> bool | None:
         with self._lock:
             if not self._approval_pending:
@@ -380,6 +392,7 @@ class InteractivePromptSession:
         self._approval_environment = ""
         self._approval_risk = ""
         self._approval_reason = ""
+        self._approval_expanded = False
 
     def handle(self, event: UiEvent) -> None:
         history_line: str | None = None
@@ -509,6 +522,7 @@ class InteractivePromptSession:
             environment = self._approval_environment
             risk = self._approval_risk
             reason = self._approval_reason
+            expanded = self._approval_expanded
             approved = self._approval_selected
         lines = [
             ("class:approval.border", "┌ "),
@@ -517,11 +531,19 @@ class InteractivePromptSession:
         ]
         if command:
             command_lines = command.splitlines()
+            omitted = 0
+            if not expanded and len(command_lines) > 3:
+                omitted = len(command_lines) - 3
+                command_lines = command_lines[:3]
             lines.append(("class:approval.command", f"│ $ {command_lines[0]}\n"))
             lines.extend(
                 ("class:approval.command", f"│   {line}\n")
                 for line in command_lines[1:]
             )
+            if omitted:
+                lines.append(
+                    ("class:approval.reason", f"│ … {omitted} more lines · press v to expand\n")
+                )
         context = [
             ("Working directory", working_directory),
             ("Environment", environment),

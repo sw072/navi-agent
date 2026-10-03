@@ -339,6 +339,28 @@ def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None
     assert session.consume_approval_selection() is None
 
 
+def test_long_approval_command_is_collapsed_until_expanded() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-long",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+            command="one\ntwo\nthree\nfour\nfive",
+        )
+    )
+    collapsed = "".join(text for _style, text in session._render_approval())
+    assert "four" not in collapsed
+    assert "… 2 more lines · press v to expand" in collapsed
+
+    session.toggle_approval_command()
+    expanded = "".join(text for _style, text in session._render_approval())
+    assert "four" in expanded and "five" in expanded
+
+
 def test_persistent_application_registers_vertical_approval_keys() -> None:
     with patch.object(Application, "run", autospec=True, return_value=None) as run:
         InteractivePromptSession().run(
@@ -351,6 +373,7 @@ def test_persistent_application_registers_vertical_approval_keys() -> None:
     assert application.key_bindings.get_bindings_for_keys((Keys.Down,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Enter,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Escape,))
+    assert application.key_bindings.get_bindings_for_keys(("v",))
 
 
 def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:
