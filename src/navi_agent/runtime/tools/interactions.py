@@ -24,6 +24,7 @@ class PendingInteraction:
     tool_call_id: str | None = None
     response: str | None = None
     approval_scope: str | None = None
+    resume_claimed: bool = False
     status: str = "pending"
     created_at: str = ""
 
@@ -149,6 +150,30 @@ class JsonPendingInteractionStore:
                 None,
             )
 
+    def claim_resolved(self, session_id: str) -> PendingInteraction | None:
+        """Atomically claim one approved interaction for a single resume."""
+        with self._lock:
+            items = self._load_active()
+            target = next(
+                (
+                    item
+                    for item in items
+                    if (
+                        item.session_id == session_id
+                        and item.status in {"approved", "denied"}
+                        and not item.resume_claimed
+                    )
+                ),
+                None,
+            )
+            if target is None:
+                return None
+            items.remove(target)
+            target = PendingInteraction(**{**asdict(target), "resume_claimed": True})
+            items.append(target)
+            self._save(items)
+            return target
+
     def complete(self, interaction_id: str) -> None:
         with self._lock:
             items = self._load_active()
@@ -260,7 +285,11 @@ class JsonPendingInteractionStore:
             payload = json.loads(self._path.read_text(encoding="utf-8"))
             items = [
                 PendingInteraction(
-                    **{**item, "approval_scope": item.get("approval_scope")}
+                    **{
+                        **item,
+                        "approval_scope": item.get("approval_scope"),
+                        "resume_claimed": item.get("resume_claimed", False),
+                    }
                 )
                 for item in payload
                 if isinstance(item, dict)

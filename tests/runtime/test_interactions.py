@@ -113,3 +113,22 @@ class JsonPendingInteractionStoreTests(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertIsNotNone(second)
         self.assertEqual(first.approval_scope, "session")
+
+    def test_resolved_interaction_is_claimed_only_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonPendingInteractionStore(Path(tmpdir) / "pending.json")
+            store.create(
+                session_id="s1",
+                user_id="u1",
+                kind="approval",
+                prompt="Approve?",
+                tool_name="bash",
+                arguments={"command": "pwd"},
+            )
+            store.resolve("s1", approved=True)
+            first = store.claim_resolved("s1")
+            second = store.claim_resolved("s1")
+
+        self.assertIsNotNone(first)
+        self.assertTrue(first.resume_claimed)
+        self.assertIsNone(second)

@@ -236,7 +236,33 @@ class OpenAICompatibleTransport:
                 serialized.append(cls._serialize_message(message))
         if system_contents:
             serialized.insert(0, {"role": "system", "content": "\n\n".join(system_contents)})
-        return serialized
+        return cls._sanitize_serialized_tool_pairs(serialized)
+
+    @staticmethod
+    def _sanitize_serialized_tool_pairs(
+        messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Drop tool messages that cannot be accepted by Chat Completions."""
+        result: list[dict[str, Any]] = []
+        pending_ids: set[str] = set()
+        for message in messages:
+            role = message.get("role")
+            if role == "tool":
+                tool_call_id = message.get("tool_call_id")
+                if tool_call_id in pending_ids:
+                    result.append(message)
+                    pending_ids.remove(tool_call_id)
+                continue
+            if pending_ids:
+                pending_ids.clear()
+            result.append(message)
+            if role == "assistant":
+                pending_ids = {
+                    str(tool_call.get("id"))
+                    for tool_call in message.get("tool_calls", [])
+                    if tool_call.get("id")
+                }
+        return result
 
     @staticmethod
     def _serialize_message(message: Message) -> dict[str, Any]:

@@ -77,7 +77,7 @@ class ConversationService:
                     session_id,
                     response=request.message,
                 )
-            resume_interaction = self._interaction_store.get_resolved(session_id)
+            resume_interaction = self._interaction_store.claim_resolved(session_id)
 
         if request.mode is RuntimeMode.ONLINE:
             self._before_online_run(session_id, request.user_id)
