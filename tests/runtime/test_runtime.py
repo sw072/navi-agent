@@ -29,6 +29,7 @@ from navi_agent.runtime import (
     ToolDefinition,
     ToolRegistry,
     ToolResult,
+    TaskSpec,
     ToolsetDefinition,
 )
 from navi_agent.runtime.tools.policy import SensitiveToolPolicy
@@ -147,6 +148,44 @@ def ok_result(name: str, content: str, **kwargs) -> ToolResult:
 
 
 class AgentRuntimeTests(unittest.TestCase):
+    def test_run_initializes_task_spec_from_user_message(self) -> None:
+        runtime = AgentRuntime(
+            transport=FakeTransport([ModelResponse(content="done")]),
+        )
+
+        result = runtime.run_conversation(
+            session_id="s1",
+            user_id="u1",
+            user_message="Answer this request",
+        )
+
+        self.assertEqual(
+            result.task_spec,
+            TaskSpec(objective="Answer this request"),
+        )
+
+    def test_run_preserves_explicit_task_spec_and_persists_it(self) -> None:
+        task_spec = TaskSpec(
+            objective="Fix the reported issue",
+            acceptance=("focused tests pass",),
+            constraints=("keep the public API stable",),
+        )
+        session_store = InMemorySessionStore()
+        runtime = AgentRuntime(
+            transport=FakeTransport([ModelResponse(content="done")]),
+            session_store=session_store,
+        )
+
+        result = runtime.run_conversation(
+            session_id="s1",
+            user_id="u1",
+            user_message="Please fix it",
+            task_spec=task_spec,
+        )
+
+        self.assertEqual(result.task_spec, task_spec)
+        self.assertEqual(session_store.get_run(result.run_id).task_spec, task_spec)
+
     def test_runtime_defaults_to_thirty_iterations(self) -> None:
         runtime = AgentRuntime(transport=FakeTransport([]))
 

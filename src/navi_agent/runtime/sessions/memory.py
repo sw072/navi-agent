@@ -116,6 +116,7 @@ class InMemorySessionStore:
             started_at=now,
             updated_at=now,
             environment_id=metadata.environment_id,
+            task_spec=metadata.task_spec,
             start_message_id=len(session.messages) + 1,
             model=metadata.model,
         )

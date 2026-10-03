@@ -15,11 +15,33 @@ from navi_agent.runtime import (
     ToolArtifact,
     ToolCall,
     ToolResult,
+    TaskSpec,
 )
 from navi_agent.runtime.models import ConversationState
 
 
 class SQLiteSessionStoreTests(unittest.TestCase):
+    def test_run_round_trips_task_spec(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = SQLiteSessionStore(Path(tmpdir) / "state.db")
+            session = store.load(session_id="s1", user_id="u1")
+            task_spec = TaskSpec(
+                objective="Fix the issue",
+                acceptance=("tests pass",),
+                constraints=("keep the API stable",),
+            )
+
+            store.start_run(
+                session,
+                "run-1",
+                SessionMetadata(task_spec=task_spec),
+            )
+
+            run = store.get_run("run-1")
+
+        self.assertIsNotNone(run)
+        self.assertEqual(run.task_spec, task_spec)
+
     def test_initialization_records_current_schema_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "state.db"
@@ -28,7 +50,7 @@ class SQLiteSessionStoreTests(unittest.TestCase):
             with sqlite3.connect(path) as connection:
                 version = connection.execute("PRAGMA user_version").fetchone()[0]
 
-        self.assertEqual(version, 2)
+        self.assertEqual(version, 3)
 
     def test_initialization_rejects_a_newer_schema_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

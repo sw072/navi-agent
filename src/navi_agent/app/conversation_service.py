@@ -19,6 +19,7 @@ from navi_agent.runtime import (
     RuntimeResult,
     RuntimeRunState,
     RunStateTracker,
+    TaskSpec,
 )
 
 
@@ -30,6 +31,7 @@ class AppRequest:
     system_prompt: str | None = None
     mode: RuntimeMode = RuntimeMode.ONLINE
     source: str = "console"
+    task_spec: TaskSpec | None = None
 
 
 class ConversationService:
@@ -88,6 +90,7 @@ class ConversationService:
                 system_prompt=system_prompt,
                 source=request.source,
                 mode=request.mode,
+                task_spec=request.task_spec,
                 event_subscribers=[self._run_states, *(event_subscribers or [])],
                 cancellation_token=cancellation_token,
                 resume_interaction=resume_interaction,

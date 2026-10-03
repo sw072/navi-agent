@@ -64,6 +64,7 @@ SCHEMA_STATEMENTS = (
         completed_at REAL,
         start_message_id INTEGER,
         end_message_id INTEGER,
+        task_spec_json TEXT,
         input_tokens INTEGER NOT NULL DEFAULT 0,
         output_tokens INTEGER NOT NULL DEFAULT 0,
         cache_read_tokens INTEGER NOT NULL DEFAULT 0,

@@ -26,6 +26,7 @@ from ..models import (
     SessionMetadata,
     SessionSummary,
     StepSnapshot,
+    TaskSpec,
     ToolCall,
 )
 from ..operations import operation_arguments_hash
@@ -70,6 +71,14 @@ def _utc_now_iso() -> str:
 
 def _duration_ms(started_perf: float) -> int:
     return int((perf_counter() - started_perf) * 1000)
+
+
+def _task_spec_payload(task_spec: TaskSpec) -> dict[str, object]:
+    return {
+        "objective": task_spec.objective,
+        "acceptance": list(task_spec.acceptance),
+        "constraints": list(task_spec.constraints),
+    }
 
 
 def _model_response_payload(
@@ -318,6 +327,7 @@ class AgentRuntime:
         system_prompt: str | None = None,
         source: str = "console",
         mode: RuntimeMode = RuntimeMode.ONLINE,
+        task_spec: TaskSpec | None = None,
         event_subscribers: Sequence[RuntimeEventSubscriber] | None = None,
         cancellation_token: RunCancellationToken | None = None,
         resume_interaction: PendingInteraction | None = None,
@@ -330,6 +340,7 @@ class AgentRuntime:
                 system_prompt=system_prompt,
                 source=source,
                 mode=mode,
+                task_spec=task_spec,
                 event_subscribers=event_subscribers,
                 cancellation_token=cancellation_token,
                 resume_interaction=resume_interaction,
@@ -343,6 +354,7 @@ class AgentRuntime:
         system_prompt: str | None = None,
         source: str = "console",
         mode: RuntimeMode = RuntimeMode.ONLINE,
+        task_spec: TaskSpec | None = None,
         event_subscribers: Sequence[RuntimeEventSubscriber] | None = None,
         cancellation_token: RunCancellationToken | None = None,
         resume_interaction: PendingInteraction | None = None,
@@ -351,6 +363,7 @@ class AgentRuntime:
         run_started_at = _utc_now_iso()
         run_started_perf = perf_counter()
         run_id = uuid4().hex
+        task_spec = task_spec or TaskSpec(objective=user_message)
         update_log_context(run_id=run_id)
         event_sequence = 0
         event_publish_lock = Lock()
@@ -410,6 +423,7 @@ class AgentRuntime:
                 "cwd": self._cwd,
                 "environment": self._environment.to_metadata(),
                 "started_at": run_started_at,
+                "task_spec": _task_spec_payload(task_spec),
             },
         )
         session_metadata = SessionMetadata(
@@ -419,6 +433,7 @@ class AgentRuntime:
             model=self._model,
             cwd=self._cwd,
             environment_id=self._environment.environment_id,
+            task_spec=task_spec,
         )
         session = self._session_store.load(
             session_id=session_id,
@@ -533,6 +548,7 @@ class AgentRuntime:
             end_reason: str | None = None,
             failure_reason: str | None = None,
         ) -> RuntimeResult:
+            result.task_spec = task_spec
             publish_event(
                 kind="observation",
                 source="runtime",

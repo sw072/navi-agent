@@ -26,6 +26,7 @@ from ..models import (
     SessionRecallView,
     SessionSummary,
     StepSnapshot,
+    TaskSpec,
     ToolCall,
 )
 from ..operations import (
@@ -38,7 +39,7 @@ from .schema import SCHEMA_STATEMENTS
 
 
 T = TypeVar("T")
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 
 def _tool_result_payload(result: ToolResult) -> dict[str, object]:
@@ -82,6 +83,19 @@ def _operation_record(row: sqlite3.Row) -> OperationRecord:
         completed_at=(
             float(row["completed_at"]) if row["completed_at"] is not None else None
         ),
+    )
+
+
+def _task_spec_from_json(value: object) -> TaskSpec | None:
+    if not isinstance(value, str) or not value:
+        return None
+    payload = json.loads(value)
+    if not isinstance(payload, dict):
+        return None
+    return TaskSpec(
+        objective=str(payload["objective"]),
+        acceptance=tuple(str(item) for item in payload.get("acceptance", [])),
+        constraints=tuple(str(item) for item in payload.get("constraints", [])),
     )
 
 
@@ -350,9 +364,10 @@ class SQLiteSessionStore:
                     environment_id,
                     started_at,
                     updated_at,
-                    start_message_id
+                    start_message_id,
+                    task_spec_json
                 )
-                VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -365,6 +380,19 @@ class SQLiteSessionStore:
                     now,
                     now,
                     int(start_boundary["next_message_id"]),
+                    (
+                        json.dumps(
+                            {
+                                "objective": metadata.task_spec.objective,
+                                "acceptance": list(metadata.task_spec.acceptance),
+                                "constraints": list(metadata.task_spec.constraints),
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        )
+                        if metadata.task_spec is not None
+                        else None
+                    ),
                 ),
             )
 
@@ -386,6 +414,7 @@ class SQLiteSessionStore:
             agent_role=str(row["agent_role"]),
             status=str(row["status"]),
             environment_id=row["environment_id"],
+            task_spec=_task_spec_from_json(row["task_spec_json"]),
             provider=row["provider"],
             model=row["model"],
             started_at=float(row["started_at"]),
@@ -1379,6 +1408,7 @@ class SQLiteSessionStore:
         migrations = (
             cls._migrate_environment_columns,
             cls._migrate_operation_columns,
+            cls._migrate_task_spec_column,
         )
         for target_version, migrate in enumerate(migrations, start=1):
             if version >= target_version:
@@ -1463,6 +1493,15 @@ class SQLiteSessionStore:
             ON tool_executions(operation_id)
             """
         )
+
+    @staticmethod
+    def _migrate_task_spec_column(connection: sqlite3.Connection) -> None:
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(runs)")
+        }
+        if "task_spec_json" not in columns:
+            connection.execute("ALTER TABLE runs ADD COLUMN task_spec_json TEXT")
 
     def _execute_write(self, operation: Callable[[sqlite3.Connection], T]) -> T:
         last_error: sqlite3.OperationalError | None = None
