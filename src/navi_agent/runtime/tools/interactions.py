@@ -23,6 +23,7 @@ class PendingInteraction:
     arguments: dict[str, Any] | None = None
     tool_call_id: str | None = None
     response: str | None = None
+    approval_scope: str | None = None
     status: str = "pending"
     created_at: str = ""
 
@@ -85,6 +86,7 @@ class JsonPendingInteractionStore:
         *,
         approved: bool,
         response: str | None = None,
+        scope: str = "once",
     ) -> PendingInteraction | None:
         with self._lock:
             items = self._load_active()
@@ -96,9 +98,12 @@ class JsonPendingInteractionStore:
                 return None
             items.remove(target)
             status = "approved" if approved else "denied"
-            target = PendingInteraction(
-                **{**asdict(target), "status": status, "response": response}
-            )
+            target = PendingInteraction(**{
+                **asdict(target),
+                "status": status,
+                "response": response,
+                "approval_scope": scope if approved else None,
+            })
             items.append(target)
             self._save(items)
             return target
@@ -147,7 +152,12 @@ class JsonPendingInteractionStore:
     def complete(self, interaction_id: str) -> None:
         with self._lock:
             items = self._load_active()
-            remaining = [item for item in items if item.interaction_id != interaction_id]
+            remaining = [
+                item
+                for item in items
+                if item.interaction_id != interaction_id
+                or item.approval_scope == "session"
+            ]
             if len(remaining) != len(items):
                 self._save(remaining)
 
@@ -182,12 +192,16 @@ class JsonPendingInteractionStore:
                     if item.session_id == session_id
                     and item.status == "approved"
                     and item.tool_name == tool_name
-                    and item.arguments == arguments
+                    and (
+                        item.approval_scope == "session"
+                        or item.arguments == arguments
+                    )
                 ),
                 None,
             )
             if target is not None:
-                items.remove(target)
+                if target.approval_scope != "session":
+                    items.remove(target)
                 self._save(items)
             return target
 
@@ -238,7 +252,13 @@ class JsonPendingInteractionStore:
             return []
         try:
             payload = json.loads(self._path.read_text(encoding="utf-8"))
-            items = [PendingInteraction(**item) for item in payload if isinstance(item, dict)]
+            items = [
+                PendingInteraction(
+                    **{**item, "approval_scope": item.get("approval_scope")}
+                )
+                for item in payload
+                if isinstance(item, dict)
+            ]
         except Exception:
             return []
         return items

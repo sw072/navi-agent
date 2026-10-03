@@ -112,6 +112,7 @@ class InteractivePromptSession:
         self._busy = False
         self._approval_pending = False
         self._approval_selected = True
+        self._approval_session_selected = False
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
@@ -225,10 +226,10 @@ class InteractivePromptSession:
 
         @bindings.add("enter")
         def submit(_event):
-            approved = self.consume_approval_selection()
-            if approved is not None:
+            choice = self.consume_approval_choice()
+            if choice is not None:
                 if on_approval is not None:
-                    on_approval(approved)
+                    on_approval(choice)
                 return
             submit_message()
 
@@ -237,9 +238,9 @@ class InteractivePromptSession:
         @bindings.add("escape", filter=approval_active)
         def deny_approval(_event):
             self.select_approval(False)
-            approved = self.consume_approval_selection()
-            if approved is not None and on_approval is not None:
-                on_approval(approved)
+            choice = self.consume_approval_choice()
+            if choice is not None and on_approval is not None:
+                on_approval(choice)
 
         @bindings.add("up", filter=approval_active)
         def select_allow(_event):
@@ -249,6 +250,14 @@ class InteractivePromptSession:
         def select_deny(_event):
             self.select_approval(False)
 
+        @bindings.add("left", filter=approval_active)
+        def select_allow_once(_event):
+            self.select_approval(True)
+
+        @bindings.add("right", filter=approval_active)
+        def select_allow_session(_event):
+            self.select_approval_session()
+
         @bindings.add("v", filter=approval_active)
         def toggle_approval_command(_event):
             self.toggle_approval_command()
@@ -256,16 +265,16 @@ class InteractivePromptSession:
         @bindings.add("y", filter=approval_active)
         def approve_shortcut(_event):
             self.select_approval(True)
-            approved = self.consume_approval_selection()
-            if approved is not None and on_approval is not None:
-                on_approval(approved)
+            choice = self.consume_approval_choice()
+            if choice is not None and on_approval is not None:
+                on_approval(choice)
 
         @bindings.add("n", filter=approval_active)
         def deny_shortcut(_event):
             self.select_approval(False)
-            approved = self.consume_approval_selection()
-            if approved is not None and on_approval is not None:
-                on_approval(approved)
+            choice = self.consume_approval_choice()
+            if choice is not None and on_approval is not None:
+                on_approval(choice)
 
         @bindings.add("f24")
         def newline(event):
@@ -370,6 +379,15 @@ class InteractivePromptSession:
             if not self._approval_pending:
                 return
             self._approval_selected = approved
+            self._approval_session_selected = False
+        self.invalidate()
+
+    def select_approval_session(self) -> None:
+        with self._lock:
+            if not self._approval_pending:
+                return
+            self._approval_selected = True
+            self._approval_session_selected = True
         self.invalidate()
 
     def toggle_approval_command(self) -> None:
@@ -380,13 +398,25 @@ class InteractivePromptSession:
         self.invalidate()
 
     def consume_approval_selection(self) -> bool | None:
+        choice = self.consume_approval_choice()
+        if choice is None:
+            return None
+        return choice != "deny"
+
+    def consume_approval_choice(self) -> str | None:
         with self._lock:
             if not self._approval_pending:
                 return None
-            approved = self._approval_selected
+            choice = (
+                "session"
+                if self._approval_selected and self._approval_session_selected
+                else "once"
+                if self._approval_selected
+                else "deny"
+            )
             self._clear_approval_locked()
         self.invalidate()
-        return approved
+        return choice
 
     def clear_approval(self) -> None:
         with self._lock:
@@ -396,6 +426,7 @@ class InteractivePromptSession:
     def _clear_approval_locked(self) -> None:
         self._approval_pending = False
         self._approval_selected = True
+        self._approval_session_selected = False
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
@@ -430,6 +461,7 @@ class InteractivePromptSession:
                 if event.kind == "approval" and event.state == "waiting":
                     self._approval_pending = True
                     self._approval_selected = True
+                    self._approval_session_selected = False
                     self._approval_title = event.title
                     self._approval_detail = event.detail or ""
                     self._approval_command = event.command or ""
@@ -548,6 +580,7 @@ class InteractivePromptSession:
             reason = self._approval_reason
             expanded = self._approval_expanded
             approved = self._approval_selected
+            session_selected = self._approval_session_selected
         lines = [
             ("class:approval.border", "┌ "),
             ("class:approval.heading", f"{title}\n"),
@@ -592,13 +625,17 @@ class InteractivePromptSession:
                 ("class:approval.border", "│\n"),
                 (
                     "class:approval.selected" if approved else "class:approval.option",
-                    f"│ {'❯' if approved else ' '} Allow once\n",
+                    f"│ {'❯' if approved and not session_selected else ' '} Allow once\n",
+                ),
+                (
+                    "class:approval.selected" if session_selected else "class:approval.option",
+                    f"│ {'❯' if session_selected else ' '} Allow for session\n",
                 ),
                 (
                     "class:approval.selected" if not approved else "class:approval.option",
                     f"│ {'❯' if not approved else ' '} Deny\n",
                 ),
-                ("class:approval.border", "└ ↑/↓ select · Enter confirm · Esc deny"),
+                ("class:approval.border", "└ ↑/↓ select · ←/→ scope · Enter confirm · Esc deny"),
             ]
         )
         return lines

@@ -303,7 +303,7 @@ def test_prompt_toolkit_measures_wrapped_approval_choices() -> None:
         get_line_prefix=None,
     )
 
-    assert height == 13
+    assert height == 15
 
 
 def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None:
@@ -458,7 +458,7 @@ def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:
             assert completed.wait(timeout=2)
             worker.join(timeout=2)
 
-    assert decisions == [False]
+    assert decisions == ["deny"]
     assert worker.is_alive() is False
 
 

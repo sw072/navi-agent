@@ -122,8 +122,9 @@ class ApplicationService:
         session_id: str,
         *,
         approved: bool,
+        scope: str = "once",
     ) -> PendingInteraction | None:
-        return self._conversation.resolve_interaction(session_id, approved=approved)
+        return self._conversation.resolve_interaction(session_id, approved=approved, scope=scope)
 
     def add_background_task_listener(
         self,

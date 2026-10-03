@@ -2309,15 +2309,21 @@ def _run_persistent_interactive(
             return
         start_run(message)
 
-    def resolve_approval(approved: bool) -> None:
-        interaction = app.resolve_interaction(current_session_id, approved=approved)
+    def resolve_approval(choice: bool | str) -> None:
+        scope = choice if isinstance(choice, str) else "once"
+        approved = choice != "deny" if isinstance(choice, str) else choice
+        interaction = app.resolve_interaction(
+            current_session_id,
+            approved=approved,
+            scope=scope if approved else "once",
+        )
         if interaction is None or interaction.kind != "approval":
             prompt_session.show_notice("No approval request is waiting.")
             return
         action = "approved" if approved else "denied"
         tool_label = interaction.tool_name or "tool"
         prompt_session.show_notice(
-            f"✓ Approved · {tool_label} · resuming…"
+            f"✓ Approved · {tool_label} · {('for this session · ' if scope == 'session' else '')}resuming…"
             if approved
             else f"■ Denied · {tool_label}"
         )
