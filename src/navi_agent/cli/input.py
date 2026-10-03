@@ -430,7 +430,7 @@ class InteractivePromptSession:
             elif event.kind in {"tool", "approval"}:
                 self._status_text = event.title if event.state == "failed" else ""
                 self._status_style = _event_style(event) or "class:status"
-                if event.kind == "approval":
+                if event.kind == "approval" and event.state == "waiting":
                     self._approval_pending = True
                     self._approval_selected = False
                     self._approval_title = event.title
@@ -606,7 +606,7 @@ class InteractivePromptSession:
 
 
 def _event_style(event: UiEvent) -> str | None:
-    if event.kind == "approval" or event.state == "waiting":
+    if event.state == "waiting" or (event.kind == "approval" and event.state not in {"completed", "failed"}):
         return "class:event.warning"
     if event.state == "failed" or event.kind == "error":
         return "class:event.error"

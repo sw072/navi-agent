@@ -159,6 +159,21 @@ def test_maps_runtime_cancellation_without_treating_it_as_failure() -> None:
     assert completed is None
 
 
+def test_maps_runtime_resume_as_approval_timeline_event() -> None:
+    ui_event = UiEventMapper().map(
+        _event(
+            "runtime.resumed",
+            {"interaction_id": "i1", "resolution": "approved"},
+            item_id="tc1",
+        )
+    )
+    assert ui_event is not None
+    assert ui_event.kind == "approval"
+    assert ui_event.state == "completed"
+    assert ui_event.title == "Approved · resuming task"
+    assert "resumed" in render_ui_event(ui_event)
+
+
 def test_does_not_render_superseded_run_as_a_failure() -> None:
     mapper = UiEventMapper()
 

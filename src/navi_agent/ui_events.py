@@ -207,6 +207,24 @@ class UiEventMapper:
                 title="任务已停止",
                 severity="info",
             )
+        if event.name == "runtime.resumed":
+            resolution = event.metadata.get("resolution")
+            approved = resolution == "approved"
+            return UiEvent(
+                event_id=event.event_id,
+                run_id=event.run_id,
+                sequence=event.sequence,
+                kind="approval",
+                state="completed" if approved else "failed",
+                title=("Approved · resuming task" if approved else "Approval rejected"),
+                item_id=event.item_id,
+                detail=(
+                    "The approved tool call is being resumed."
+                    if approved
+                    else "The pending approval was not accepted."
+                ),
+                severity="info" if approved else "error",
+            )
         if event.name == "runtime.waiting":
             if event.metadata.get("interaction_kind") == "approval":
                 return None
