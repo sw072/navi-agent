@@ -374,6 +374,8 @@ def test_persistent_application_registers_vertical_approval_keys() -> None:
     assert application.key_bindings.get_bindings_for_keys((Keys.Enter,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Escape,))
     assert application.key_bindings.get_bindings_for_keys(("v",))
+    assert application.key_bindings.get_bindings_for_keys(("y",))
+    assert application.key_bindings.get_bindings_for_keys(("n",))
 
 
 def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:

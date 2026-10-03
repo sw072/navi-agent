@@ -250,6 +250,20 @@ class InteractivePromptSession:
         def toggle_approval_command(_event):
             self.toggle_approval_command()
 
+        @bindings.add("y", filter=approval_active)
+        def approve_shortcut(_event):
+            self.select_approval(True)
+            approved = self.consume_approval_selection()
+            if approved is not None and on_approval is not None:
+                on_approval(approved)
+
+        @bindings.add("n", filter=approval_active)
+        def deny_shortcut(_event):
+            self.select_approval(False)
+            approved = self.consume_approval_selection()
+            if approved is not None and on_approval is not None:
+                on_approval(approved)
+
         @bindings.add("f24")
         def newline(event):
             event.current_buffer.insert_text("\n")
