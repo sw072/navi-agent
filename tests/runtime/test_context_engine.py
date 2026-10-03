@@ -34,6 +34,31 @@ class ContextEngineTests(unittest.TestCase):
         self.assertEqual(result.messages, messages)
         self.assertEqual(result.estimated_tokens_before, result.estimated_tokens_after)
 
+    def test_removes_orphaned_tool_messages_without_compression(self) -> None:
+        messages = [
+            Message(role="system", content="system"),
+            Message(role="user", content="hello"),
+            Message(role="tool", content="stale result", tool_call_id="missing"),
+            Message(role="assistant", content="done"),
+        ]
+        result = ContextEngine(context_limit_tokens=1_000, reserved_output_tokens=100).build(messages)
+        self.assertFalse(any(message.role == "tool" for message in result.messages))
+
+    def test_replaces_non_adjacent_tool_message_with_valid_pair(self) -> None:
+        messages = [
+            Message(role="assistant", content="", tool_calls=[ToolCall(id="tc1", name="bash")]),
+            Message(role="assistant", content="intervening"),
+            Message(role="tool", content="late result", tool_call_id="tc1"),
+        ]
+        result = ContextEngine(context_limit_tokens=1_000, reserved_output_tokens=100).build(messages)
+        tool_messages = [message for message in result.messages if message.role == "tool"]
+        self.assertEqual(len(tool_messages), 1)
+        self.assertEqual(
+            tool_messages[0].content,
+            "[Result from earlier conversation — see context summary above]",
+        )
+        self.assertEqual(result.messages[1].role, "tool")
+
     def test_prepends_ephemeral_messages_without_covering_them_in_checkpoint(self) -> None:
         prefix = [Message(role="system", content="fresh dynamic prompt")]
         messages = [
