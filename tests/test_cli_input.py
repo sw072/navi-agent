@@ -303,7 +303,7 @@ def test_prompt_toolkit_measures_wrapped_approval_choices() -> None:
         get_line_prefix=None,
     )
 
-    assert height == 11
+    assert height == 13
 
 
 def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None:
@@ -359,6 +359,22 @@ def test_long_approval_command_is_collapsed_until_expanded() -> None:
     session.toggle_approval_command()
     expanded = "".join(text for _style, text in session._render_approval())
     assert "four" in expanded and "five" in expanded
+
+
+def test_approval_card_states_one_time_scope() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-scope",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+        )
+    )
+    rendered = "".join(text for _style, text in session._render_approval())
+    assert "Scope: this request only" in rendered
 
 
 def test_persistent_application_registers_vertical_approval_keys() -> None:

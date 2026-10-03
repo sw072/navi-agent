@@ -559,6 +559,7 @@ class InteractivePromptSession:
                     ("class:approval.reason", f"│ … {omitted} more lines · press v to expand\n")
                 )
         context = [
+            ("Scope", "this request only"),
             ("Working directory", working_directory),
             ("Environment", environment),
             ("Risk", risk),
