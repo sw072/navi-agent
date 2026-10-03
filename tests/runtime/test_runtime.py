@@ -185,6 +185,8 @@ class AgentRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result.task_spec, task_spec)
         self.assertEqual(session_store.get_run(result.run_id).task_spec, task_spec)
+        self.assertFalse(result.completion_verified)
+        self.assertEqual(result.completion_reason, "acceptance_not_verified")
 
     def test_runtime_defaults_to_thirty_iterations(self) -> None:
         runtime = AgentRuntime(transport=FakeTransport([]))

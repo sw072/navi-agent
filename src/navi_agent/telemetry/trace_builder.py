@@ -114,6 +114,8 @@ def _tool_execution(event: RuntimeEvent) -> ToolExecutionTrace:
 def _complete_trace(trace: RuntimeTrace, event: RuntimeEvent) -> None:
     trace.final_response = _string(event.metadata.get("final_response")) or ""
     trace.status = _string(event.metadata.get("status")) or "failed"
+    trace.completion_verified = _boolean(event.metadata.get("completion_verified"))
+    trace.completion_reason = _string(event.metadata.get("completion_reason"))
     trace.tool_names = [item.tool_name for item in trace.tool_executions]
     trace.total_iterations = _integer(event.metadata.get("attempt_count"))
     trace.approval_count = sum(1 for item in trace.tool_executions if item.approval_required)

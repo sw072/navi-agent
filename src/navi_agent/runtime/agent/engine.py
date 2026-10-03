@@ -514,6 +514,8 @@ class AgentRuntime:
                 "duration_ms": _duration_ms(run_started_perf),
                 "trajectory_complete": not critical_event_failures,
                 "trajectory_failure_count": len(critical_event_failures),
+                "completion_verified": result.completion_verified,
+                "completion_reason": result.completion_reason,
                 **(error_info or {}),
             }
 
@@ -549,6 +551,18 @@ class AgentRuntime:
             failure_reason: str | None = None,
         ) -> RuntimeResult:
             result.task_spec = task_spec
+            result.completion_verified = (
+                True
+                if convergence_reason is not None
+                else False
+                if task_spec.acceptance
+                else None
+            )
+            result.completion_reason = end_reason or convergence_reason
+            if result.completion_reason is None:
+                result.completion_reason = (
+                    "acceptance_not_verified" if task_spec.acceptance else result.status
+                )
             publish_event(
                 kind="observation",
                 source="runtime",
@@ -565,7 +579,7 @@ class AgentRuntime:
                 session,
                 run_id,
                 status=result.status,
-                end_reason=finalization_reason(result, end_reason),
+                end_reason=finalization_reason(result, result.completion_reason),
                 trajectory_complete=result.trajectory_complete,
                 failure_reason=result.trajectory_error or failure_reason,
             )

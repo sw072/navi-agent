@@ -220,6 +220,8 @@ class RuntimeResult:
     final_response: str
     run_id: str = ""
     task_spec: TaskSpec | None = None
+    completion_verified: bool | None = None
+    completion_reason: str | None = None
     messages: list[Message] = field(default_factory=list)
     tool_results: list[ToolResult] = field(default_factory=list)
     trajectory_complete: bool = True
