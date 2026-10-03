@@ -173,13 +173,15 @@ class ToolExecutor:
                                     "tool_name": tool_call.name,
                                     "arguments": tool_call.arguments,
                                     "working_directory": (
-                                        context.environment.workspace_root
-                                        if context.environment is not None
+                                        tool_context.environment.workspace_root
+                                        if tool_context is not None
+                                        and tool_context.environment is not None
                                         else None
                                     ),
                                     "environment": (
-                                        context.environment.executor_kind
-                                        if context.environment is not None
+                                        tool_context.environment.executor_kind
+                                        if tool_context is not None
+                                        and tool_context.environment is not None
                                         else "host"
                                     ),
                                     "risk": approval_decision.metadata.get(
