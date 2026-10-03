@@ -111,7 +111,7 @@ class InteractivePromptSession:
         self._response_text = ""
         self._busy = False
         self._approval_pending = False
-        self._approval_selected = False
+        self._approval_selected = True
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
@@ -395,7 +395,7 @@ class InteractivePromptSession:
 
     def _clear_approval_locked(self) -> None:
         self._approval_pending = False
-        self._approval_selected = False
+        self._approval_selected = True
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
@@ -429,7 +429,7 @@ class InteractivePromptSession:
                 self._status_style = _event_style(event) or "class:status"
                 if event.kind == "approval" and event.state == "waiting":
                     self._approval_pending = True
-                    self._approval_selected = False
+                    self._approval_selected = True
                     self._approval_title = event.title
                     self._approval_detail = event.detail or ""
                     self._approval_command = event.command or ""

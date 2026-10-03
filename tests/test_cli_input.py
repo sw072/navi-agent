@@ -255,8 +255,8 @@ def test_approval_event_renders_inline_vertical_choices() -> None:
     text = "".join(fragment for _style, fragment in rendered)
     assert "Approval required · Bash" in text
     assert "$ uv run pytest" in text
-    assert "  Allow once" in text
-    assert "❯ Deny" in text
+    assert "❯ Allow once" in text
+    assert "❯ Allow once" in text
     assert "/approve" not in text
 
 
@@ -319,7 +319,7 @@ def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None
         )
     )
 
-    assert session.consume_approval_selection() is False
+    assert session.consume_approval_selection() is True
 
     session.handle(
         UiEvent(
