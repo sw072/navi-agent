@@ -77,7 +77,7 @@ class ConversationService:
                     session_id,
                     response=request.message,
                 )
-            resume_interaction = self._interaction_store.get_resolved(session_id)
+            resume_interaction = self._interaction_store.claim_resolved(session_id)
 
         if request.mode is RuntimeMode.ONLINE:
             self._before_online_run(session_id, request.user_id)
@@ -127,11 +127,12 @@ class ConversationService:
         session_id: str,
         *,
         approved: bool,
+        scope: str = "once",
     ) -> PendingInteraction | None:
         if self._interaction_store is None:
             return None
         self._publish_expired_interactions(session_id=session_id)
-        return self._interaction_store.resolve(session_id, approved=approved)
+        return self._interaction_store.resolve(session_id, approved=approved, scope=scope)
 
     def _publish_expired_interactions(
         self,

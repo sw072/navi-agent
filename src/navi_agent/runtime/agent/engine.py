@@ -882,8 +882,12 @@ class AgentRuntime:
                     session_id,
                     exc,
                 )
+                sanitize_messages = getattr(self._context_engine, "sanitize_tool_pairs", None)
+                fallback_messages = [run_system_message, *session_snapshot]
+                if callable(sanitize_messages):
+                    fallback_messages = sanitize_messages(fallback_messages)
                 context_result = ContextBuildResult(
-                    messages=[run_system_message, *session_snapshot],
+                    messages=fallback_messages,
                     original_message_count=len(session_snapshot),
                     estimated_tokens_before=0,
                     estimated_tokens_after=0,

@@ -89,7 +89,7 @@ class ContextEngine:
             estimated_reused = self.estimate_tokens([*prefix, *reusable])
             if estimated_reused <= self._threshold_tokens:
                 return ContextBuildResult(
-                    messages=[*prefix, *reusable],
+                    messages=self._sanitize_tool_pairs([*prefix, *reusable]),
                     original_message_count=len(original),
                     estimated_tokens_before=estimated_before,
                     estimated_tokens_after=estimated_reused,
@@ -104,7 +104,7 @@ class ContextEngine:
                 )
         if estimated_before <= self._threshold_tokens:
             return ContextBuildResult(
-                messages=[*prefix, *original],
+                messages=self._sanitize_tool_pairs([*prefix, *original]),
                 original_message_count=len(original),
                 estimated_tokens_before=estimated_before,
                 estimated_tokens_after=estimated_before,
@@ -117,7 +117,7 @@ class ContextEngine:
 
         if compress_start >= tail_start:
             return ContextBuildResult(
-                messages=[*prefix, *original],
+                messages=self._sanitize_tool_pairs([*prefix, *original]),
                 original_message_count=len(original),
                 estimated_tokens_before=estimated_before,
                 estimated_tokens_after=estimated_before,
@@ -130,7 +130,7 @@ class ContextEngine:
 
         if self._summarizer is None:
             return ContextBuildResult(
-                messages=[*prefix, *original],
+                messages=self._sanitize_tool_pairs([*prefix, *original]),
                 original_message_count=len(original),
                 estimated_tokens_before=estimated_before,
                 estimated_tokens_after=estimated_before,
@@ -319,34 +319,43 @@ class ContextEngine:
         return f"{SUMMARY_PREFIX}\n{content}"
 
     def _sanitize_tool_pairs(self, messages: list[Message]) -> list[Message]:
-        assistant_call_ids = {
-            tool_call.id
-            for message in messages
-            if message.role == "assistant"
-            for tool_call in message.tool_calls
-            if tool_call.id
-        }
-        tool_result_ids = {
-            message.tool_call_id
-            for message in messages
-            if message.role == "tool" and message.tool_call_id
-        }
         result: list[Message] = []
+        pending_call_ids: set[str] = set()
         for message in messages:
-            if message.role == "tool" and message.tool_call_id not in assistant_call_ids:
+            if message.role == "tool":
+                if message.tool_call_id in pending_call_ids:
+                    result.append(message)
+                    pending_call_ids.remove(message.tool_call_id)
                 continue
+            if pending_call_ids:
+                result.extend(
+                    Message(
+                        role="tool",
+                        content="[Result from earlier conversation — see context summary above]",
+                        tool_call_id=tool_call_id,
+                    )
+                    for tool_call_id in sorted(pending_call_ids)
+                )
+                pending_call_ids.clear()
             result.append(message)
             if message.role == "assistant":
-                for tool_call in message.tool_calls:
-                    if tool_call.id and tool_call.id not in tool_result_ids:
-                        result.append(
-                            Message(
-                                role="tool",
-                                content="[Result from earlier conversation — see context summary above]",
-                                tool_call_id=tool_call.id,
-                            )
-                        )
+                pending_call_ids = {
+                    tool_call.id for tool_call in message.tool_calls if tool_call.id
+                }
+        if pending_call_ids:
+            result.extend(
+                Message(
+                    role="tool",
+                    content="[Result from earlier conversation — see context summary above]",
+                    tool_call_id=tool_call_id,
+                )
+                for tool_call_id in sorted(pending_call_ids)
+            )
         return result
+
+    def sanitize_tool_pairs(self, messages: list[Message]) -> list[Message]:
+        """Return messages safe for providers that require adjacent tool pairs."""
+        return self._sanitize_tool_pairs(messages)
 
 
 class ContextSummarizer(Protocol):

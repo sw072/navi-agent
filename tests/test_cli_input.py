@@ -253,10 +253,10 @@ def test_approval_event_renders_inline_vertical_choices() -> None:
 
     rendered = session._render_approval()
     text = "".join(fragment for _style, fragment in rendered)
-    assert "! Approval required · Bash" in text
+    assert "Approval required · Bash" in text
     assert "$ uv run pytest" in text
-    assert "❯ Allow" in text
-    assert "  Deny" in text
+    assert "❯ Allow once" in text
+    assert "❯ Allow once" in text
     assert "/approve" not in text
 
 
@@ -276,9 +276,9 @@ def test_approval_event_renders_complete_multiline_command() -> None:
     )
 
     text = "".join(fragment for _style, fragment in session._render_approval())
-    assert "  $ python - <<'PY'" in text
-    assert "    print('hello')" in text
-    assert "    PY" in text
+    assert "│ $ python - <<'PY'" in text
+    assert "│   print('hello')" in text
+    assert "│   PY" in text
 
 
 def test_prompt_toolkit_measures_wrapped_approval_choices() -> None:
@@ -303,7 +303,7 @@ def test_prompt_toolkit_measures_wrapped_approval_choices() -> None:
         get_line_prefix=None,
     )
 
-    assert height == 7
+    assert height == 15
 
 
 def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None:
@@ -339,6 +339,108 @@ def test_approval_selection_uses_vertical_choice_and_enter_consumes_it() -> None
     assert session.consume_approval_selection() is None
 
 
+def test_approval_selection_can_choose_session_scope() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-session",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+        )
+    )
+    session.move_approval_selection(1)
+    fragments = session._render_approval()
+    rendered = "".join(text for _style, text in fragments)
+    assert "❯ Allow for session" in rendered
+    assert "Scope: same request in this session" in rendered
+    allow_once = next(style for style, text in fragments if "Allow once" in text)
+    session_allow = next(style for style, text in fragments if "Allow for session" in text)
+    assert allow_once == "class:approval.option"
+    assert session_allow == "class:approval.selected"
+    assert session.consume_approval_choice() == "session"
+
+
+def test_long_approval_command_is_collapsed_until_expanded() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-long",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+            command="one\ntwo\nthree\nfour\nfive",
+        )
+    )
+    collapsed = "".join(text for _style, text in session._render_approval())
+    assert "four" not in collapsed
+    assert "… 2 more lines · press v to expand" in collapsed
+
+    session.toggle_approval_command()
+    expanded = "".join(text for _style, text in session._render_approval())
+    assert "four" in expanded and "five" in expanded
+
+
+def test_approval_card_states_one_time_scope() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-scope",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+        )
+    )
+    rendered = "".join(text for _style, text in session._render_approval())
+    assert "Scope: this request only" in rendered
+
+
+def test_bash_approval_card_renders_reason_without_detail() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-reason",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+            reason="The command modifies files.",
+        )
+    )
+
+    rendered = "".join(text for _style, text in session._render_approval())
+    assert "├ Reason" in rendered
+    assert "│ The command modifies files." in rendered
+
+
+def test_approval_toolbar_shows_working_directory() -> None:
+    session = InteractivePromptSession()
+    session.handle(
+        UiEvent(
+            event_id="approval-toolbar",
+            run_id="run-1",
+            sequence=1,
+            kind="approval",
+            state="waiting",
+            title="Approval required · Bash",
+            working_directory="/workspace/project",
+        )
+    )
+    assert "cwd: /workspace/project" in session._toolbar_text()
+
+
+def test_toolbar_always_shows_current_working_directory() -> None:
+    session = InteractivePromptSession()
+    assert "cwd: " in session._toolbar_text()
+
+
 def test_persistent_application_registers_vertical_approval_keys() -> None:
     with patch.object(Application, "run", autospec=True, return_value=None) as run:
         InteractivePromptSession().run(
@@ -350,6 +452,10 @@ def test_persistent_application_registers_vertical_approval_keys() -> None:
     assert application.key_bindings.get_bindings_for_keys((Keys.Up,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Down,))
     assert application.key_bindings.get_bindings_for_keys((Keys.Enter,))
+    assert application.key_bindings.get_bindings_for_keys((Keys.Escape,))
+    assert application.key_bindings.get_bindings_for_keys(("v",))
+    assert application.key_bindings.get_bindings_for_keys(("y",))
+    assert application.key_bindings.get_bindings_for_keys(("n",))
 
 
 def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:
@@ -391,11 +497,11 @@ def test_down_and_enter_confirm_denial_in_real_prompt_application() -> None:
             deadline = time.monotonic() + 2
             while session._application is None and time.monotonic() < deadline:
                 time.sleep(0.01)
-            pipe_input.send_text("\x1b[B\r")
+            pipe_input.send_text("\x1b[B\x1b[B\r")
             assert completed.wait(timeout=2)
             worker.join(timeout=2)
 
-    assert decisions == [False]
+    assert decisions == ["deny"]
     assert worker.is_alive() is False
 
 

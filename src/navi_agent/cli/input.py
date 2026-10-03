@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import shutil
+from html import escape
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -23,7 +25,11 @@ INTERACTIVE_STYLE = {
     "event.success": "ansigreen bold",
     "event.warning": "ansiyellow bold",
     "approval.option": "",
-    "approval.selected": "ansiyellow bold",
+    "approval.selected": "ansicyan bold",
+    "approval.border": "ansibrightblack",
+    "approval.heading": "ansiyellow bold",
+    "approval.command": "",
+    "approval.reason": "ansibrightblack",
     "frame.border": "ansibrightblack",
     "input": "",
     "placeholder": "ansibrightblack italic",
@@ -99,15 +105,22 @@ class InteractivePromptSession:
         self._history = InMemoryHistory()
         self._lock = Lock()
         self._application = None
+        self._working_directory = str(Path.cwd())
         self._status_text = ""
         self._status_style = "class:status"
         self._response_text = ""
         self._busy = False
         self._approval_pending = False
         self._approval_selected = True
+        self._approval_session_selected = False
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
+        self._approval_working_directory = ""
+        self._approval_environment = ""
+        self._approval_risk = ""
+        self._approval_reason = ""
+        self._approval_expanded = False
         self._seen_event_ids: set[str] = set()
 
     def prompt(self, _message: Any = None, *, placeholder: str = "") -> str:
@@ -213,22 +226,55 @@ class InteractivePromptSession:
 
         @bindings.add("enter")
         def submit(_event):
-            approved = self.consume_approval_selection()
-            if approved is not None:
+            choice = self.consume_approval_choice()
+            if choice is not None:
                 if on_approval is not None:
-                    on_approval(approved)
+                    on_approval(choice)
                 return
             submit_message()
 
         approval_active = Condition(lambda: self.approval_pending)
 
+        @bindings.add("escape", filter=approval_active)
+        def deny_approval(_event):
+            self.select_approval(False)
+            choice = self.consume_approval_choice()
+            if choice is not None and on_approval is not None:
+                on_approval(choice)
+
         @bindings.add("up", filter=approval_active)
         def select_allow(_event):
-            self.select_approval(True)
+            self.move_approval_selection(-1)
 
         @bindings.add("down", filter=approval_active)
         def select_deny(_event):
+            self.move_approval_selection(1)
+
+        @bindings.add("left", filter=approval_active)
+        def select_allow_once(_event):
+            self.select_approval(True)
+
+        @bindings.add("right", filter=approval_active)
+        def select_allow_session(_event):
+            self.select_approval_session()
+
+        @bindings.add("v", filter=approval_active)
+        def toggle_approval_command(_event):
+            self.toggle_approval_command()
+
+        @bindings.add("y", filter=approval_active)
+        def approve_shortcut(_event):
+            self.select_approval(True)
+            choice = self.consume_approval_choice()
+            if choice is not None and on_approval is not None:
+                on_approval(choice)
+
+        @bindings.add("n", filter=approval_active)
+        def deny_shortcut(_event):
             self.select_approval(False)
+            choice = self.consume_approval_choice()
+            if choice is not None and on_approval is not None:
+                on_approval(choice)
 
         @bindings.add("f24")
         def newline(event):
@@ -263,13 +309,7 @@ class InteractivePromptSession:
         )
         toolbar = Window(
             content=FormattedTextControl(
-                lambda: HTML(
-                    "<toolbar> ↑/↓ select · Enter confirm </toolbar>"
-                    if self.approval_pending
-                    else "<toolbar> Agent running · /stop · /steer &lt;message&gt; </toolbar>"
-                    if self.is_busy
-                    else "<toolbar> Enter send · Shift+Enter newline · Ctrl-C quit </toolbar>"
-                )
+                lambda: HTML(self._toolbar_text())
             ),
             height=1,
             style="class:toolbar",
@@ -339,16 +379,60 @@ class InteractivePromptSession:
             if not self._approval_pending:
                 return
             self._approval_selected = approved
+            self._approval_session_selected = False
+        self.invalidate()
+
+    def select_approval_session(self) -> None:
+        with self._lock:
+            if not self._approval_pending:
+                return
+            self._approval_selected = True
+            self._approval_session_selected = True
+        self.invalidate()
+
+    def move_approval_selection(self, delta: int) -> None:
+        with self._lock:
+            if not self._approval_pending:
+                return
+            current = (
+                1
+                if self._approval_session_selected
+                else 0
+                if self._approval_selected
+                else 2
+            )
+            selected = (current + delta) % 3
+            self._approval_selected = selected != 2
+            self._approval_session_selected = selected == 1
+        self.invalidate()
+
+    def toggle_approval_command(self) -> None:
+        with self._lock:
+            if not self._approval_pending:
+                return
+            self._approval_expanded = not self._approval_expanded
         self.invalidate()
 
     def consume_approval_selection(self) -> bool | None:
+        choice = self.consume_approval_choice()
+        if choice is None:
+            return None
+        return choice != "deny"
+
+    def consume_approval_choice(self) -> str | None:
         with self._lock:
             if not self._approval_pending:
                 return None
-            approved = self._approval_selected
+            choice = (
+                "session"
+                if self._approval_selected and self._approval_session_selected
+                else "once"
+                if self._approval_selected
+                else "deny"
+            )
             self._clear_approval_locked()
         self.invalidate()
-        return approved
+        return choice
 
     def clear_approval(self) -> None:
         with self._lock:
@@ -358,9 +442,15 @@ class InteractivePromptSession:
     def _clear_approval_locked(self) -> None:
         self._approval_pending = False
         self._approval_selected = True
+        self._approval_session_selected = False
         self._approval_title = ""
         self._approval_detail = ""
         self._approval_command = ""
+        self._approval_working_directory = ""
+        self._approval_environment = ""
+        self._approval_risk = ""
+        self._approval_reason = ""
+        self._approval_expanded = False
 
     def handle(self, event: UiEvent) -> None:
         history_line: str | None = None
@@ -384,12 +474,17 @@ class InteractivePromptSession:
             elif event.kind in {"tool", "approval"}:
                 self._status_text = event.title if event.state == "failed" else ""
                 self._status_style = _event_style(event) or "class:status"
-                if event.kind == "approval":
+                if event.kind == "approval" and event.state == "waiting":
                     self._approval_pending = True
                     self._approval_selected = True
+                    self._approval_session_selected = False
                     self._approval_title = event.title
                     self._approval_detail = event.detail or ""
                     self._approval_command = event.command or ""
+                    self._approval_working_directory = event.working_directory or ""
+                    self._approval_environment = event.environment or ""
+                    self._approval_risk = event.risk or ""
+                    self._approval_reason = event.reason or ""
                 else:
                     history_line = render_ui_event(event)
             elif event.kind == "error" or event.state == "failed":
@@ -475,6 +570,19 @@ class InteractivePromptSession:
             style = self._status_style
         return [(style, f"  {status}")] if status else []
 
+    def _toolbar_text(self) -> str:
+        with self._lock:
+            working_directory = self._approval_working_directory or self._working_directory
+        directory = f" · cwd: {escape(working_directory)}"
+        if self.approval_pending:
+            return (
+                "<toolbar> ↑/↓ select · Enter confirm · v details · Esc deny"
+                f"{directory} </toolbar>"
+            )
+        if self.is_busy:
+            return f"<toolbar> Agent running · /stop · /steer &lt;message&gt;{directory} </toolbar>"
+        return f"<toolbar> Enter send · Shift+Enter newline · Ctrl-C quit{directory} </toolbar>"
+
     def _render_approval(self):
         with self._lock:
             if not self._approval_pending:
@@ -482,29 +590,73 @@ class InteractivePromptSession:
             title = self._approval_title
             detail = self._approval_detail
             command = self._approval_command
+            working_directory = self._approval_working_directory
+            environment = self._approval_environment
+            risk = self._approval_risk
+            reason = self._approval_reason
+            expanded = self._approval_expanded
             approved = self._approval_selected
+            session_selected = self._approval_session_selected
         lines = [
-            ("class:event.warning", f"! {title}\n"),
+            ("class:approval.border", "┌ "),
+            ("class:approval.heading", f"{title}\n"),
+            ("class:approval.border", "├ Operation\n"),
         ]
         if command:
             command_lines = command.splitlines()
-            lines.append(("class:event.output", f"  $ {command_lines[0]}\n"))
+            omitted = 0
+            if not expanded and len(command_lines) > 3:
+                omitted = len(command_lines) - 3
+                command_lines = command_lines[:3]
+            lines.append(("class:approval.command", f"│ $ {command_lines[0]}\n"))
             lines.extend(
-                ("class:event.output", f"    {line}\n")
+                ("class:approval.command", f"│   {line}\n")
                 for line in command_lines[1:]
             )
-        if detail:
-            lines.append(("class:event.output", f"  {detail}\n"))
+            if omitted:
+                lines.append(
+                    ("class:approval.reason", f"│ … {omitted} more lines · press v to expand\n")
+                )
+        context = [
+            (
+                "Scope",
+                "same request in this session"
+                if session_selected
+                else "this request only",
+            ),
+            ("Working directory", working_directory),
+            ("Environment", environment),
+            ("Risk", risk),
+        ]
+        if any(value for _, value in context):
+            lines.append(("class:approval.border", "├ Context\n"))
+            lines.extend(
+                ("class:approval.reason", f"│ {label}: {value}\n")
+                for label, value in context
+                if value
+            )
+        if reason or detail:
+            lines.append(("class:approval.border", "├ Reason\n"))
+            lines.extend(
+                ("class:approval.reason", f"│ {line}\n")
+                for line in (reason or detail).splitlines()
+            )
         lines.extend(
             [
+                ("class:approval.border", "│\n"),
                 (
-                    "class:approval.selected" if approved else "class:approval.option",
-                    f"  {'❯' if approved else ' '} Allow\n",
+                    "class:approval.selected" if approved and not session_selected else "class:approval.option",
+                    f"│ {'❯' if approved and not session_selected else ' '} Allow once\n",
+                ),
+                (
+                    "class:approval.selected" if session_selected else "class:approval.option",
+                    f"│ {'❯' if session_selected else ' '} Allow for session\n",
                 ),
                 (
                     "class:approval.selected" if not approved else "class:approval.option",
-                    f"  {'❯' if not approved else ' '} Deny",
+                    f"│ {'❯' if not approved else ' '} Deny\n",
                 ),
+                ("class:approval.border", "└ ↑/↓ select · ←/→ scope · Enter confirm · Esc deny"),
             ]
         )
         return lines
@@ -523,7 +675,7 @@ class InteractivePromptSession:
 
 
 def _event_style(event: UiEvent) -> str | None:
-    if event.kind == "approval" or event.state == "waiting":
+    if event.state == "waiting" or (event.kind == "approval" and event.state not in {"completed", "failed"}):
         return "class:event.warning"
     if event.state == "failed" or event.kind == "error":
         return "class:event.error"

@@ -88,6 +88,73 @@ class OpenAICompatibleTransportTests(unittest.TestCase):
                     client = self._generate_with_messages(messages, streaming=streaming)
                     self.assertEqual(client.chat.completions.calls[0]["messages"], expected)
 
+    def test_serialization_drops_unanswered_tool_calls(self) -> None:
+        messages = [
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[
+                    ToolCall(id="tc1", name="echo", arguments={"value": "one"}),
+                    ToolCall(id="tc2", name="echo", arguments={"value": "two"}),
+                ],
+            ),
+            Message(role="tool", content="one", tool_call_id="tc1"),
+            Message(role="user", content="Continue."),
+        ]
+
+        client = self._generate_with_messages(messages, streaming=False)
+
+        self.assertEqual(
+            client.chat.completions.calls[0]["messages"],
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "tc1",
+                        "type": "function",
+                        "function": {
+                            "name": "echo",
+                            "arguments": '{"value": "one"}',
+                        },
+                    }],
+                },
+                {"role": "tool", "content": "one", "tool_call_id": "tc1"},
+                {"role": "user", "content": "Continue."},
+            ],
+        )
+
+    def test_serialization_drops_all_tool_calls_when_no_result_arrives(self) -> None:
+        messages = [
+            Message(
+                role="assistant",
+                content="waiting",
+                tool_calls=[ToolCall(id="tc1", name="echo", arguments={})],
+            )
+        ]
+
+        client = self._generate_with_messages(messages, streaming=False)
+
+        self.assertEqual(
+            client.chat.completions.calls[0]["messages"],
+            [{"role": "assistant", "content": "waiting"}],
+        )
+
+    def test_transport_drops_orphaned_tool_messages_before_request(self) -> None:
+        messages = [
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[ToolCall(id="tc1", name="bash", arguments={"command": "pwd"})],
+            ),
+            Message(role="tool", content="first", tool_call_id="tc1"),
+            Message(role="assistant", content="follow-up"),
+            Message(role="tool", content="duplicate", tool_call_id="tc1"),
+        ]
+        client = self._generate_with_messages(messages, streaming=False)
+        serialized = client.chat.completions.calls[0]["messages"]
+        self.assertEqual([message["role"] for message in serialized], ["assistant", "tool", "assistant"])
+
     @staticmethod
     def _generate_with_messages(messages, *, streaming):
         response = types.SimpleNamespace(choices=[types.SimpleNamespace(

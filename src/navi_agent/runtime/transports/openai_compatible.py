@@ -236,7 +236,56 @@ class OpenAICompatibleTransport:
                 serialized.append(cls._serialize_message(message))
         if system_contents:
             serialized.insert(0, {"role": "system", "content": "\n\n".join(system_contents)})
-        return serialized
+        return cls._sanitize_serialized_tool_pairs(serialized)
+
+    @staticmethod
+    def _sanitize_serialized_tool_pairs(
+        messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Drop tool messages that cannot be accepted by Chat Completions."""
+        result: list[dict[str, Any]] = []
+        pending_ids: set[str] = set()
+        pending_assistant_index: int | None = None
+
+        def discard_unanswered_calls() -> None:
+            nonlocal pending_assistant_index
+            if not pending_ids or pending_assistant_index is None:
+                return
+            assistant = result[pending_assistant_index]
+            calls = assistant.get("tool_calls", [])
+            completed_calls = [
+                call for call in calls if call.get("id") not in pending_ids
+            ]
+            if completed_calls:
+                assistant["tool_calls"] = completed_calls
+            else:
+                assistant.pop("tool_calls", None)
+            pending_assistant_index = None
+
+        for message in messages:
+            role = message.get("role")
+            if role == "tool":
+                tool_call_id = message.get("tool_call_id")
+                if tool_call_id in pending_ids:
+                    result.append(message)
+                    pending_ids.remove(tool_call_id)
+                continue
+            if pending_ids:
+                discard_unanswered_calls()
+                pending_ids.clear()
+            pending_assistant_index = None
+            result.append(message)
+            if role == "assistant":
+                pending_ids = {
+                    str(tool_call.get("id"))
+                    for tool_call in message.get("tool_calls", [])
+                    if tool_call.get("id")
+                }
+                if pending_ids:
+                    pending_assistant_index = len(result) - 1
+        if pending_ids:
+            discard_unanswered_calls()
+        return result
 
     @staticmethod
     def _serialize_message(message: Message) -> dict[str, Any]:

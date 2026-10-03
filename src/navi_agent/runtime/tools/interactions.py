@@ -23,6 +23,8 @@ class PendingInteraction:
     arguments: dict[str, Any] | None = None
     tool_call_id: str | None = None
     response: str | None = None
+    approval_scope: str | None = None
+    resume_claimed: bool = False
     status: str = "pending"
     created_at: str = ""
 
@@ -85,6 +87,7 @@ class JsonPendingInteractionStore:
         *,
         approved: bool,
         response: str | None = None,
+        scope: str = "once",
     ) -> PendingInteraction | None:
         with self._lock:
             items = self._load_active()
@@ -96,9 +99,12 @@ class JsonPendingInteractionStore:
                 return None
             items.remove(target)
             status = "approved" if approved else "denied"
-            target = PendingInteraction(
-                **{**asdict(target), "status": status, "response": response}
-            )
+            target = PendingInteraction(**{
+                **asdict(target),
+                "status": status,
+                "response": response,
+                "approval_scope": scope if approved else None,
+            })
             items.append(target)
             self._save(items)
             return target
@@ -144,10 +150,39 @@ class JsonPendingInteractionStore:
                 None,
             )
 
+    def claim_resolved(self, session_id: str) -> PendingInteraction | None:
+        """Atomically claim one approved interaction for a single resume."""
+        with self._lock:
+            items = self._load_active()
+            target = next(
+                (
+                    item
+                    for item in items
+                    if (
+                        item.session_id == session_id
+                        and item.status in {"approved", "denied"}
+                        and not item.resume_claimed
+                    )
+                ),
+                None,
+            )
+            if target is None:
+                return None
+            items.remove(target)
+            target = PendingInteraction(**{**asdict(target), "resume_claimed": True})
+            items.append(target)
+            self._save(items)
+            return target
+
     def complete(self, interaction_id: str) -> None:
         with self._lock:
             items = self._load_active()
-            remaining = [item for item in items if item.interaction_id != interaction_id]
+            remaining = [
+                item
+                for item in items
+                if item.interaction_id != interaction_id
+                or item.approval_scope == "session"
+            ]
             if len(remaining) != len(items):
                 self._save(remaining)
 
@@ -180,14 +215,21 @@ class JsonPendingInteractionStore:
                     item
                     for item in items
                     if item.session_id == session_id
-                    and item.status == "approved"
+                    and item.status in {"approved", "granted"}
                     and item.tool_name == tool_name
                     and item.arguments == arguments
                 ),
                 None,
             )
             if target is not None:
-                items.remove(target)
+                if target.approval_scope != "session":
+                    items.remove(target)
+                else:
+                    items.remove(target)
+                    target = PendingInteraction(
+                        **{**asdict(target), "status": "granted"}
+                    )
+                    items.append(target)
                 self._save(items)
             return target
 
@@ -223,7 +265,10 @@ class JsonPendingInteractionStore:
             remaining = [
                 item
                 for item in items
-                if not (item.session_id == session_id and item.status == "approved")
+                if not (
+                    item.session_id == session_id
+                    and item.status in {"approved", "granted"}
+                )
             ]
             if len(remaining) != len(items):
                 self._save(remaining)
@@ -238,7 +283,17 @@ class JsonPendingInteractionStore:
             return []
         try:
             payload = json.loads(self._path.read_text(encoding="utf-8"))
-            items = [PendingInteraction(**item) for item in payload if isinstance(item, dict)]
+            items = [
+                PendingInteraction(
+                    **{
+                        **item,
+                        "approval_scope": item.get("approval_scope"),
+                        "resume_claimed": item.get("resume_claimed", False),
+                    }
+                )
+                for item in payload
+                if isinstance(item, dict)
+            ]
         except Exception:
             return []
         return items
@@ -271,7 +326,7 @@ class DeferredApprovalProvider:
                 reason=f"Approved by user for tool: {request.tool_name}",
                 metadata={"interaction_id": approved.interaction_id},
             )
-        prompt = f"工具 {request.tool_name} 需要授权。回复 /approve 或 /deny。"
+        prompt = f"Tool {request.tool_name} requires approval. Reply /approve or /deny."
         pending = self._store.create(
             session_id=context.session_id,
             user_id=context.user_id,

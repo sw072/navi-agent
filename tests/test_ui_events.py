@@ -49,6 +49,30 @@ def test_maps_tool_lifecycle_with_stable_item_identity() -> None:
     assert completed.title == "已读取文件"
 
 
+def test_maps_approval_context_for_review_card() -> None:
+    ui_event = UiEventMapper().map(
+        _event(
+            "tool.result",
+            {
+                "tool_name": "bash",
+                "structured_content": {
+                    "approval_required": True,
+                    "working_directory": "/workspace/project",
+                    "environment": "docker",
+                    "risk": "network",
+                    "reason": "命令会访问网络",
+                    "arguments": {"command": "curl https://example.com"},
+                },
+            },
+        )
+    )
+    assert ui_event is not None
+    assert ui_event.working_directory == "/workspace/project"
+    assert ui_event.environment == "docker"
+    assert ui_event.risk == "network"
+    assert ui_event.reason == "命令会访问网络"
+
+
 def test_redacts_and_truncates_tool_failure_detail() -> None:
     ui_event = UiEventMapper().map(
         _event(
@@ -133,6 +157,21 @@ def test_maps_runtime_cancellation_without_treating_it_as_failure() -> None:
     assert cancelled.state == "cancelled"
     assert cancelled.severity == "info"
     assert completed is None
+
+
+def test_maps_runtime_resume_as_approval_timeline_event() -> None:
+    ui_event = UiEventMapper().map(
+        _event(
+            "runtime.resumed",
+            {"interaction_id": "i1", "resolution": "approved"},
+            item_id="tc1",
+        )
+    )
+    assert ui_event is not None
+    assert ui_event.kind == "approval"
+    assert ui_event.state == "completed"
+    assert ui_event.title == "Approved · resuming task"
+    assert "resumed" in render_ui_event(ui_event)
 
 
 def test_does_not_render_superseded_run_as_a_failure() -> None:
