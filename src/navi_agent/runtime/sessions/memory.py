@@ -121,6 +121,15 @@ class InMemorySessionStore:
             model=metadata.model,
         )
 
+    def resume_run(self, session: ConversationState, run_id: str) -> None:
+        run = self._runs.get(run_id)
+        if run is None or run.session_id != session.session_id:
+            raise ValueError(f"run not found for resume: {run_id}")
+        run.status = "running"
+        run.completed_at = None
+        run.updated_at = time.time()
+        run.completion_reason = None
+
     def get_run(self, run_id: str) -> RuntimeRunRecord | None:
         return self._runs.get(run_id)
 

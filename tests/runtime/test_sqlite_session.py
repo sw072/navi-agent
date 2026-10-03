@@ -42,6 +42,25 @@ class SQLiteSessionStoreTests(unittest.TestCase):
         self.assertIsNotNone(run)
         self.assertEqual(run.task_spec, task_spec)
 
+    def test_resume_run_reuses_existing_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = SQLiteSessionStore(Path(tmpdir) / "state.db")
+            session = store.load(session_id="s1", user_id="u1")
+            task_spec = TaskSpec(objective="Fix the issue")
+            store.start_run(
+                session,
+                "run-1",
+                SessionMetadata(task_spec=task_spec),
+            )
+            store.finalize(session, "run-1", status="awaiting_input")
+
+            store.resume_run(session, "run-1")
+            run = store.get_run("run-1")
+
+        self.assertIsNotNone(run)
+        self.assertEqual(run.status, "running")
+        self.assertEqual(run.task_spec, task_spec)
+
     def test_initialization_records_current_schema_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "state.db"

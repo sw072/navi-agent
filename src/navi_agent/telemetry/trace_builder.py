@@ -21,24 +21,26 @@ class TraceBuilder:
         completed: RuntimeTrace | None = None
         with self._lock:
             if event.name == "runtime.started":
-                self._traces[event.run_id] = RuntimeTrace(
-                    trace_id=event.run_id,
-                    session_id=event.session_id,
-                    user_id=event.user_id,
-                    user_message="",
-                    final_response="",
-                    status="running",
-                    agent_role=_string(event.metadata.get("agent_role")) or "primary",
-                    parent_session_id=_string(event.metadata.get("parent_session_id")),
-                    started_at=_string(event.metadata.get("started_at")) or event.timestamp,
-                )
+                if event.run_id not in self._traces:
+                    self._traces[event.run_id] = RuntimeTrace(
+                        trace_id=event.run_id,
+                        session_id=event.session_id,
+                        user_id=event.user_id,
+                        user_message="",
+                        final_response="",
+                        status="running",
+                        agent_role=_string(event.metadata.get("agent_role")) or "primary",
+                        parent_session_id=_string(event.metadata.get("parent_session_id")),
+                        started_at=_string(event.metadata.get("started_at")) or event.timestamp,
+                    )
                 return
 
             trace = self._traces.get(event.run_id)
             if trace is None:
                 return
             if event.name == "user.message":
-                trace.user_message = _string(event.metadata.get("content")) or ""
+                if not trace.user_message:
+                    trace.user_message = _string(event.metadata.get("content")) or ""
             elif event.name == "runtime.context_ready":
                 trace.system_prompt = _string(event.metadata.get("system_prompt"))
                 trace.injected_skill_names = _string_list(
@@ -50,7 +52,8 @@ class TraceBuilder:
                 trace.tool_executions.append(_tool_execution(event))
             elif event.name == "runtime.completed":
                 _complete_trace(trace, event)
-                completed = self._traces.pop(event.run_id)
+                if trace.status != "awaiting_input":
+                    completed = self._traces.pop(event.run_id)
 
         if completed is not None:
             self._store.record(completed)
