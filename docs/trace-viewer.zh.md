@@ -1,7 +1,8 @@
 # 本地 Trace Viewer
 
-本地 Trace Viewer 是 Navi Runtime Session 的只读调试界面。它直接读取已有的
-`traces.jsonl` 和 `runtime-events.jsonl`，不复制数据库，也不替代 Langfuse。
+本地 Trace Viewer 是 Navi Runtime Session 的只读调试界面。它通过索引读取本地
+`state.db` 中的 Runtime Trace 和 Runtime Event，不替代 Langfuse。已有的
+`traces.jsonl` 和 `runtime-events.jsonl` 会在 SQLite 遥测首次启动时一次性导入。
 
 本地 Viewer 适合分析单次运行、查看真实 Model/Tool 顺序、确认 Skill 加载和离线排障；
 Langfuse 继续负责远程聚合、成本分析与长期趋势。
@@ -51,5 +52,5 @@ cache-write 和 reasoning token；时间线中的每个 Model Event 也会显示
 - Viewer 会向本机浏览器展示已记录的 Prompt、Reasoning、工具参数和结果；应把当前
   机器账号视为安全边界。
 - 脱敏只是纵深防御，不能保证识别自由文本中的所有秘密。
-- 服务会按请求读取 JSONL，适合本地开发数据，不适合大型多用户部署。
+- 服务使用 SQLite 索引查询，适合本地开发，不适合大型多用户部署。
 - Offline Replay 仍是独立 Runtime 服务，Viewer 当前不能执行 Replay。

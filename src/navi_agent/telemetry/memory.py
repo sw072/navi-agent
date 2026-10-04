@@ -38,6 +38,9 @@ class InMemoryTraceStore:
             traces = [trace for trace in traces if trace.user_id == user_id]
         return traces
 
+    def get_trace(self, trace_id: str) -> RuntimeTrace | None:
+        return next((trace for trace in self.traces if trace.trace_id == trace_id), None)
+
     def get_latest_trace(
         self,
         *,
@@ -52,3 +55,6 @@ class InMemoryTraceStore:
         if not traces:
             return None
         return traces[-1]
+
+    def list_recent_session_ids(self, *, limit: int) -> list[str]:
+        return list(dict.fromkeys(trace.session_id for trace in reversed(self.traces)))[:limit]

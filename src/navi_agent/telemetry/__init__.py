@@ -9,6 +9,7 @@ from .jsonl import JsonlTraceStore
 from .health import RuntimeHealthService, RuntimeHealthSummary
 from .langfuse import LangfuseTraceExporter, is_langfuse_sdk_available
 from .memory import InMemoryTraceStore
+from .migration import TelemetryMigrationResult, migrate_legacy_jsonl
 from .models import ModelCallTrace, RuntimeTrace, ToolExecutionTrace
 from .replay import (
     ReplayModelStep,
@@ -23,6 +24,7 @@ from .replay import (
     RuntimeReplayPlanner,
 )
 from .serializer import TraceSerializer
+from .sqlite import SQLiteRuntimeEventStore, SQLiteTraceStore
 from .store import TraceStore
 from .trace_builder import TraceBuilder
 from .trajectory import RuntimeTrajectory, RuntimeTrajectoryService
@@ -33,8 +35,11 @@ __all__ = [
     "InMemoryRuntimeEventStore",
     "JsonlTraceStore",
     "JsonlRuntimeEventStore",
+    "SQLiteRuntimeEventStore",
+    "SQLiteTraceStore",
     "LangfuseTraceExporter",
     "ModelCallTrace",
+    "TelemetryMigrationResult",
     "RuntimeTrace",
     "RuntimeEventStore",
     "RuntimeHealthService",
@@ -57,5 +62,6 @@ __all__ = [
     "ToolExecutionTrace",
     "TraceStore",
     "TraceBuilder",
+    "migrate_legacy_jsonl",
     "is_langfuse_sdk_available",
 ]

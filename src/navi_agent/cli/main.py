@@ -81,10 +81,11 @@ from navi_agent.paths import get_trace_viewer_dir
 from navi_agent.paths import get_tool_use_eval_reports_dir
 from navi_agent.paths import get_tool_use_reports_dir
 from navi_agent.telemetry import (
-    JsonlRuntimeEventStore,
-    JsonlTraceStore,
     RuntimeHealthService,
     RuntimeTrajectoryService,
+    SQLiteRuntimeEventStore,
+    SQLiteTraceStore,
+    migrate_legacy_jsonl,
 )
 from navi_agent.ui_events import ConsoleUiEventSink, UiEventEmitter
 from navi_agent.runtime import CliApprovalProvider, RuntimeMode
@@ -535,12 +536,28 @@ def _run_skill_command(args, *, parser: argparse.ArgumentParser) -> int:
     parser.error("skill command requires import, eval, feedback, aggregate, or activate")
 
 
+def _local_telemetry_stores() -> tuple[SQLiteTraceStore, SQLiteRuntimeEventStore]:
+    database_path = get_state_db_path()
+    SQLiteSessionStore(database_path)
+    trace_store = SQLiteTraceStore(database_path)
+    event_store = SQLiteRuntimeEventStore(database_path)
+    migrate_legacy_jsonl(
+        database_path=database_path,
+        event_path=get_runtime_event_store_path(),
+        trace_path=get_trace_store_path(),
+        event_store=event_store,
+        trace_store=trace_store,
+    )
+    return trace_store, event_store
+
+
 def _run_trace_command(args, *, parser: argparse.ArgumentParser) -> int:
     from navi_agent.telemetry.viewer import TraceViewerService
 
+    trace_store, event_store = _local_telemetry_stores()
     service = TraceViewerService(
-        trace_store=JsonlTraceStore(get_trace_store_path()),
-        event_store=JsonlRuntimeEventStore(get_runtime_event_store_path()),
+        trace_store=trace_store,
+        event_store=event_store,
     )
     if args.subcommand == "serve":
         from navi_agent.telemetry.viewer_server import serve_trace_viewer
@@ -1469,13 +1486,14 @@ def _list_skills() -> int:
 
 
 def _print_skill_status() -> int:
+    trace_store, _ = _local_telemetry_stores()
     records = SkillUsageService(
         skill_store=FileSkillStore(get_skills_dir()),
-        trace_store=JsonlTraceStore(get_trace_store_path()),
+        trace_store=trace_store,
         usage_store=SkillUsageStore(get_skills_dir()),
     ).summarize()
     print(f"skills_dir: {get_skills_dir()}")
-    print(f"trace_store_path: {get_trace_store_path()}")
+    print(f"trace_store_path: {get_state_db_path()}")
     print(f"skill_count: {len(records)}")
     if not records:
         return 0
@@ -1491,16 +1509,17 @@ def _print_skill_status() -> int:
 
 
 def _print_skill_curator_status() -> int:
+    trace_store, _ = _local_telemetry_stores()
     status = SkillCuratorStatusService(
         usage_service=SkillUsageService(
             skill_store=FileSkillStore(get_skills_dir()),
-            trace_store=JsonlTraceStore(get_trace_store_path()),
+            trace_store=trace_store,
             usage_store=SkillUsageStore(get_skills_dir()),
         ),
         provenance_store=SkillProvenanceStore(get_skills_dir()),
     ).summarize()
     print(f"skills_dir: {get_skills_dir()}")
-    print(f"trace_store_path: {get_trace_store_path()}")
+    print(f"trace_store_path: {get_state_db_path()}")
     print(f"skill_count: {status.skill_count}")
     print(f"agent_created_count: {status.agent_created_count}")
     print(f"manual_count: {status.manual_count}")
@@ -1523,6 +1542,7 @@ def _print_skill_curator_status() -> int:
 def _archive_unused_agent_skills() -> int:
     skill_store = FileSkillStore(get_skills_dir())
     usage_store = SkillUsageStore(get_skills_dir())
+    trace_store, _ = _local_telemetry_stores()
     result = SkillCuratorService(
         skill_governance=SkillGovernanceService(
             skill_store,
@@ -1530,7 +1550,7 @@ def _archive_unused_agent_skills() -> int:
         ),
         usage_service=SkillUsageService(
             skill_store=skill_store,
-            trace_store=JsonlTraceStore(get_trace_store_path()),
+            trace_store=trace_store,
             usage_store=usage_store,
         ),
         provenance_store=SkillProvenanceStore(get_skills_dir()),
@@ -1573,15 +1593,17 @@ def _print_runtime_events(*, session_id: str | None, run_id: str | None = None) 
     if not session_id:
         print("--runtime-events requires --session-id")
         return 1
-    service = RuntimeTrajectoryService(JsonlRuntimeEventStore(get_runtime_event_store_path()))
-    print(f"runtime_event_store_path: {get_runtime_event_store_path()}")
+    _, event_store = _local_telemetry_stores()
+    service = RuntimeTrajectoryService(event_store)
+    print(f"runtime_event_store_path: {get_state_db_path()}")
     print(service.render(session_id=session_id, run_id=run_id))
     return 0
 
 
 def _print_runtime_health(*, session_id: str | None = None) -> int:
-    service = RuntimeHealthService(JsonlRuntimeEventStore(get_runtime_event_store_path()))
-    print(f"runtime_event_store_path: {get_runtime_event_store_path()}")
+    _, event_store = _local_telemetry_stores()
+    service = RuntimeHealthService(event_store)
+    print(f"runtime_event_store_path: {get_state_db_path()}")
     print(service.render(session_id=session_id))
     return 0
 
@@ -1590,7 +1612,8 @@ def _export_runtime_tool_use_case(*, session_id: str | None, run_id: str | None 
     if not session_id:
         print("--runtime-export-tool-use-case requires --session-id")
         return 1
-    trajectory = RuntimeTrajectoryService(JsonlRuntimeEventStore(get_runtime_event_store_path())).load(
+    _, event_store = _local_telemetry_stores()
+    trajectory = RuntimeTrajectoryService(event_store).load(
         session_id=session_id,
         run_id=run_id,
     )
@@ -1612,7 +1635,8 @@ def _import_runtime_tool_use_case(
     if not session_id:
         print("--runtime-import-tool-use-case requires --session-id")
         return 1
-    trajectory = RuntimeTrajectoryService(JsonlRuntimeEventStore(get_runtime_event_store_path())).load(
+    _, event_store = _local_telemetry_stores()
+    trajectory = RuntimeTrajectoryService(event_store).load(
         session_id=session_id,
         run_id=run_id,
     )

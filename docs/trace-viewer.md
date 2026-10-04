@@ -1,8 +1,9 @@
 # Local Trace Viewer
 
 The local Trace Viewer is a read-only debugging surface for Navi runtime
-sessions. It reads the existing `traces.jsonl` and `runtime-events.jsonl`; it
-does not copy telemetry into another database or replace Langfuse.
+sessions. It reads indexed Runtime Trace and Runtime Event records from the
+local `state.db`; it does not replace Langfuse. Existing `traces.jsonl` and
+`runtime-events.jsonl` records are imported once when SQLite telemetry starts.
 
 Use the local viewer for one-run diagnosis, true Model/Tool event order, Skill
 loading, and offline investigation. Use Langfuse for remote aggregation, cost
@@ -61,7 +62,7 @@ than a misleading partial total.
   boundary.
 - Redaction is defense in depth, not a guarantee that arbitrary secrets in free
   text will be detected.
-- The server reads JSONL on request and is intended for local development data,
+- The server uses indexed SQLite queries and is intended for local development,
   not large multi-user deployments.
 - Offline Replay remains a separate runtime service and is not executable from
   the viewer.

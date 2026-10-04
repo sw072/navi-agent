@@ -181,7 +181,7 @@ def test_sandbox_bridge_edits_and_executes_inside_inspect_environment(monkeypatc
         lambda config: trace_store,
     )
     monkeypatch.setattr(
-        "evals.inspect.swe_bench.JsonlRuntimeEventStore",
+        "evals.inspect.swe_bench.SQLiteRuntimeEventStore",
         lambda path: event_store,
     )
 
@@ -217,7 +217,7 @@ def test_inspect_runtime_runner_allows_concurrent_samples(monkeypatch) -> None:
         lambda config: trace_store,
     )
     monkeypatch.setattr(
-        "evals.inspect.swe_bench.JsonlRuntimeEventStore",
+        "evals.inspect.swe_bench.SQLiteRuntimeEventStore",
         lambda path: event_store,
     )
 
@@ -246,7 +246,11 @@ def test_inspect_runtime_runner_allows_concurrent_samples(monkeypatch) -> None:
     assert len({result.run_id for result in results}) == 2
 
 
-def test_builds_task_from_official_inspect_eval_components() -> None:
+def test_builds_task_from_official_inspect_eval_components(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("NAVI_HOME", str(tmp_path))
     task = navi_swe_bench_verified(
         runner=InspectRuntimeRunner(
             transport=FakeTransport(),

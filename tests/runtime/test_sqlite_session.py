@@ -69,7 +69,7 @@ class SQLiteSessionStoreTests(unittest.TestCase):
             with sqlite3.connect(path) as connection:
                 version = connection.execute("PRAGMA user_version").fetchone()[0]
 
-        self.assertEqual(version, 3)
+        self.assertEqual(version, 4)
 
     def test_initialization_rejects_a_newer_schema_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

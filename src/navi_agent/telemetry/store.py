@@ -16,6 +16,8 @@ class TraceStore(Protocol):
         limit: int | None = None,
     ) -> list[RuntimeTrace]: ...
 
+    def get_trace(self, trace_id: str) -> RuntimeTrace | None: ...
+
     def get_session_traces(
         self,
         session_id: str,
@@ -29,3 +31,5 @@ class TraceStore(Protocol):
         session_id: str | None = None,
         user_id: str | None = None,
     ) -> RuntimeTrace | None: ...
+
+    def list_recent_session_ids(self, *, limit: int) -> list[str]: ...

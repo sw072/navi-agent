@@ -39,7 +39,7 @@ from .schema import SCHEMA_STATEMENTS
 
 
 T = TypeVar("T")
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 def _tool_result_payload(result: ToolResult) -> dict[str, object]:
@@ -1440,6 +1440,7 @@ class SQLiteSessionStore:
             cls._migrate_environment_columns,
             cls._migrate_operation_columns,
             cls._migrate_task_spec_column,
+            cls._migrate_telemetry_tables,
         )
         for target_version, migrate in enumerate(migrations, start=1):
             if version >= target_version:
@@ -1458,6 +1459,16 @@ class SQLiteSessionStore:
                 connection.execute(
                     f"ALTER TABLE {table} ADD COLUMN environment_id TEXT"
                 )
+
+    @staticmethod
+    def _migrate_telemetry_tables(connection: sqlite3.Connection) -> None:
+        for statement in SCHEMA_STATEMENTS:
+            if (
+                "runtime_events" in statement
+                or "runtime_traces" in statement
+                or "telemetry_imports" in statement
+            ):
+                connection.execute(statement)
 
     @staticmethod
     def _migrate_operation_columns(connection: sqlite3.Connection) -> None:

@@ -124,6 +124,36 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS runtime_events (
+        event_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        timestamp TEXT NOT NULL,
+        name TEXT NOT NULL,
+        event_json TEXT NOT NULL,
+        UNIQUE (run_id, sequence)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS runtime_traces (
+        trace_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        trace_json TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS telemetry_imports (
+        source_key TEXT PRIMARY KEY,
+        imported_at TEXT NOT NULL,
+        record_count INTEGER NOT NULL
+    )
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_messages_session
     ON messages(session_id, id)
     """,
@@ -135,6 +165,10 @@ SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_runs_status_updated ON runs(status, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_step_snapshots_run ON step_snapshots(run_id, iteration)",
     "CREATE INDEX IF NOT EXISTS idx_tool_executions_session ON tool_executions(session_id, started_at)",
+    "CREATE INDEX IF NOT EXISTS idx_runtime_events_session ON runtime_events(session_id, timestamp, sequence)",
+    "CREATE INDEX IF NOT EXISTS idx_runtime_events_run ON runtime_events(run_id, sequence)",
+    "CREATE INDEX IF NOT EXISTS idx_runtime_traces_session ON runtime_traces(session_id, completed_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_runtime_traces_user ON runtime_traces(user_id, completed_at DESC)",
     "CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content)",
     "CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts_trigram USING fts5(content, tokenize='trigram')",
     """
