@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
+import json
 from pathlib import Path
 
 from navi_agent.events import RuntimeEvent
@@ -10,7 +12,9 @@ from navi_agent.telemetry import (
     RuntimeTrace,
     SQLiteRuntimeEventStore,
     SQLiteTraceStore,
+    TraceSerializer,
     ToolExecutionTrace,
+    migrate_legacy_jsonl,
 )
 
 
@@ -130,3 +134,62 @@ def test_sqlite_trace_store_upserts_a_completed_trace(tmp_path: Path) -> None:
     assert len(traces) == 1
     assert traces[0].status == "success"
     assert traces[0].final_response == "done"
+
+
+def test_migrates_legacy_jsonl_once_and_skips_invalid_records(tmp_path: Path) -> None:
+    database_path = _database(tmp_path)
+    event_path = tmp_path / "runtime-events.jsonl"
+    trace_path = tmp_path / "traces.jsonl"
+    event = RuntimeEvent(
+        event_id="event-1",
+        session_id="session-1",
+        user_id="user-1",
+        run_id="run-1",
+        sequence=1,
+        kind="action",
+        source="user",
+        name="user.message",
+        metadata={"content": "hello"},
+    )
+    event_payload = asdict(event)
+    event_payload["payload"] = event_payload.pop("metadata")
+    event_path.write_text(
+        json.dumps(event_payload) + "\nnot-json\n{}\n",
+        encoding="utf-8",
+    )
+    trace = RuntimeTrace(
+        trace_id="trace-1",
+        session_id="session-1",
+        user_id="user-1",
+        user_message="hello",
+        final_response="done",
+        status="success",
+    )
+    trace_path.write_text(
+        TraceSerializer.to_json(trace) + '\n{"unknown": true}\n',
+        encoding="utf-8",
+    )
+    event_store = SQLiteRuntimeEventStore(database_path)
+    trace_store = SQLiteTraceStore(database_path)
+
+    result = migrate_legacy_jsonl(
+        database_path=database_path,
+        event_path=event_path,
+        trace_path=trace_path,
+        event_store=event_store,
+        trace_store=trace_store,
+    )
+    second_result = migrate_legacy_jsonl(
+        database_path=database_path,
+        event_path=event_path,
+        trace_path=trace_path,
+        event_store=event_store,
+        trace_store=trace_store,
+    )
+
+    assert result.event_count == 1
+    assert result.trace_count == 1
+    assert second_result.event_count == 0
+    assert second_result.trace_count == 0
+    assert event_store.list_events()[0].metadata == {"content": "hello"}
+    assert trace_store.get_trace("trace-1") is not None

@@ -137,6 +137,18 @@ class FakePromptSession:
 
 
 class CliTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._home = tempfile.TemporaryDirectory()
+        self._environment = patch.dict(
+            "os.environ",
+            {"NAVI_HOME": self._home.name, "NAVI_API_KEY": "test-key"},
+        )
+        self._environment.start()
+
+    def tearDown(self) -> None:
+        self._environment.stop()
+        self._home.cleanup()
+
     def test_version_flag_prints_installed_version(self) -> None:
         with self.assertRaises(SystemExit) as raised, redirect_stdout(io.StringIO()) as stdout:
             build_parser().parse_args(["--version"])
@@ -2082,7 +2094,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn("skills_dir: /tmp/skills", stdout.getvalue())
-        self.assertIn("trace_store_path: /tmp/traces.jsonl", stdout.getvalue())
+        self.assertIn(f"trace_store_path: {self._home.name}/state.db", stdout.getvalue())
         self.assertIn("skill_count: 1", stdout.getvalue())
         self.assertIn("- readme-summary: Summarize README files", stdout.getvalue())
         self.assertIn("injected_count: 2", stdout.getvalue())
@@ -2185,7 +2197,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         service_cls.return_value.render.assert_called_once_with(session_id="s1", run_id=None)
-        self.assertIn("runtime_event_store_path: /tmp/events.jsonl", stdout.getvalue())
+        self.assertIn(f"runtime_event_store_path: {self._home.name}/state.db", stdout.getvalue())
         self.assertIn("runtime_trajectory:", stdout.getvalue())
 
     def test_main_requires_session_id_for_runtime_events(self) -> None:
@@ -2210,7 +2222,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         service_cls.return_value.render.assert_called_once_with(session_id="s1")
-        self.assertIn("runtime_event_store_path: /tmp/events.jsonl", stdout.getvalue())
+        self.assertIn(f"runtime_event_store_path: {self._home.name}/state.db", stdout.getvalue())
         self.assertIn("runtime_health:", stdout.getvalue())
 
     def test_main_exports_runtime_tool_use_case(self) -> None:

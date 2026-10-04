@@ -1463,7 +1463,11 @@ class SQLiteSessionStore:
     @staticmethod
     def _migrate_telemetry_tables(connection: sqlite3.Connection) -> None:
         for statement in SCHEMA_STATEMENTS:
-            if "runtime_events" in statement or "runtime_traces" in statement:
+            if (
+                "runtime_events" in statement
+                or "runtime_traces" in statement
+                or "telemetry_imports" in statement
+            ):
                 connection.execute(statement)
 
     @staticmethod

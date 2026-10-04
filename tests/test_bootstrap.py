@@ -24,7 +24,7 @@ from navi_agent.runtime import (
     ToolRegistration,
 )
 from navi_agent.runtime.tools.approval import AutoApproveApprovalProvider
-from navi_agent.telemetry import CompositeTraceStore, JsonlTraceStore
+from navi_agent.telemetry import CompositeTraceStore, SQLiteTraceStore
 from navi_agent.evolution import (
     FileSkillStore,
     JsonlCandidateStore,
@@ -295,7 +295,7 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertIsInstance(runtime._trace_store, CompositeTraceStore)
 
-    def test_build_runtime_falls_back_to_jsonl_trace_store_when_exporter_init_fails(self) -> None:
+    def test_build_runtime_falls_back_to_sqlite_trace_store_when_exporter_init_fails(self) -> None:
         with patch("navi_agent.app.bootstrap.SQLiteSessionStore"):
             with patch("navi_agent.app.bootstrap.setup_logging"):
                 with patch(
@@ -311,7 +311,7 @@ class BootstrapTests(unittest.TestCase):
                             runtime_settings=RuntimeSettings(max_iterations=3),
                         )
 
-        self.assertIsInstance(runtime._trace_store, JsonlTraceStore)
+        self.assertIsInstance(runtime._trace_store, SQLiteTraceStore)
 
     def test_build_application_wires_evolution_stores(self) -> None:
         with patch("navi_agent.app.bootstrap.build_runtime") as build_runtime_mock:

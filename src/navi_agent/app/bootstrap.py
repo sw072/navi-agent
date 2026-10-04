@@ -64,9 +64,11 @@ from navi_agent.runtime import (
 from navi_agent.runtime.tools.approval import ApprovalProvider, DenyAllApprovalProvider
 from navi_agent.telemetry import (
     CompositeTraceStore,
-    JsonlRuntimeEventStore,
-    JsonlTraceStore,
     LangfuseTraceExporter,
+    SQLiteRuntimeEventStore,
+    SQLiteTraceStore,
+    TraceStore,
+    migrate_legacy_jsonl,
 )
 from navi_agent.tools.defaults import BuiltinToolProvider, build_tool_registry
 
@@ -102,10 +104,20 @@ def build_runtime(
         if primary_profile is not None and primary_profile.transport is not None
         else build_transport(model_settings)
     )
-    session_store = SQLiteSessionStore(get_state_db_path())
+    state_db_path = get_state_db_path()
+    session_store = SQLiteSessionStore(state_db_path)
     memory_store = memory_store or FileMemoryStore(get_memories_dir())
     skill_store = skill_store or FileSkillStore(get_skills_dir())
-    trace_store = build_trace_store(config)
+    primary_trace_store = SQLiteTraceStore(state_db_path)
+    event_store = SQLiteRuntimeEventStore(state_db_path)
+    migrate_legacy_jsonl(
+        database_path=state_db_path,
+        event_path=get_runtime_event_store_path(),
+        trace_path=get_trace_store_path(),
+        event_store=event_store,
+        trace_store=primary_trace_store,
+    )
+    trace_store = build_trace_store(config, primary=primary_trace_store)
     background_task_manager = BackgroundTaskManager(
         store=BackgroundTaskStore(get_state_db_path())
     )
@@ -116,7 +128,6 @@ def build_runtime(
         additional_workspace_roots=added_roots,
     )
 
-    event_store = JsonlRuntimeEventStore(get_runtime_event_store_path())
     subagent_service: SubagentService
 
     def create_runtime(
@@ -300,8 +311,11 @@ def build_application(
     )
 
 
-def build_trace_store(config: dict) -> JsonlTraceStore | CompositeTraceStore:
-    primary = JsonlTraceStore(get_trace_store_path())
+def build_trace_store(
+    config: dict,
+    *,
+    primary: TraceStore,
+) -> TraceStore | CompositeTraceStore:
     settings = LangfuseSettings.from_sources(config)
     if not settings.enabled:
         return primary

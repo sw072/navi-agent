@@ -147,6 +147,13 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS telemetry_imports (
+        source_key TEXT PRIMARY KEY,
+        imported_at TEXT NOT NULL,
+        record_count INTEGER NOT NULL
+    )
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_messages_session
     ON messages(session_id, id)
     """,
