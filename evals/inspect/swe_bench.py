@@ -17,7 +17,7 @@ from evals.inspect.adapter import NaviInspectResult, navi_runtime_success
 from navi_agent.app.bootstrap import build_trace_store
 from navi_agent.app import AppRequest, ApplicationService
 from navi_agent.config import ModelSettings, RuntimeSettings, load_config
-from navi_agent.paths import get_runtime_event_store_path
+from navi_agent.paths import get_state_db_path
 from navi_agent.runtime import (
     AgentRuntime,
     InMemorySessionStore,
@@ -27,7 +27,7 @@ from navi_agent.runtime import (
     ToolResult,
     build_transport,
 )
-from navi_agent.telemetry import JsonlRuntimeEventStore
+from navi_agent.telemetry import SQLiteRuntimeEventStore
 
 
 SWE_BENCH_DATASET = "princeton-nlp/SWE-bench_Verified"
@@ -325,7 +325,7 @@ class InspectRuntimeRunner:
         self._model = model
         self._max_iterations = max_iterations
         self._trace_store = build_trace_store(load_config())
-        self._event_store = JsonlRuntimeEventStore(get_runtime_event_store_path())
+        self._event_store = SQLiteRuntimeEventStore(get_state_db_path())
 
     def run(
         self,

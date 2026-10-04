@@ -314,8 +314,19 @@ def build_application(
 def build_trace_store(
     config: dict,
     *,
-    primary: TraceStore,
+    primary: TraceStore | None = None,
 ) -> TraceStore | CompositeTraceStore:
+    if primary is None:
+        database_path = get_state_db_path()
+        SQLiteSessionStore(database_path)
+        primary = SQLiteTraceStore(database_path)
+        migrate_legacy_jsonl(
+            database_path=database_path,
+            event_path=get_runtime_event_store_path(),
+            trace_path=get_trace_store_path(),
+            event_store=SQLiteRuntimeEventStore(database_path),
+            trace_store=primary,
+        )
     settings = LangfuseSettings.from_sources(config)
     if not settings.enabled:
         return primary
