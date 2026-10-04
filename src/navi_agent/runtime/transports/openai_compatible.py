@@ -225,9 +225,18 @@ class OpenAICompatibleTransport:
 
     @classmethod
     def _serialize_messages(cls, messages: list[Message]) -> list[dict[str, Any]]:
-        return cls._sanitize_serialized_tool_pairs(
-            [cls._serialize_message(message) for message in messages]
-        )
+        serialized = []
+        for index, message in enumerate(messages):
+            # Keep the leading system prompt and all history in place. Older
+            # sessions stored runtime context as additional system messages.
+            if message.role == "runtime" or (message.role == "system" and index > 0):
+                serialized.append({
+                    "role": "user",
+                    "content": f"[Runtime context]\n{message.content}",
+                })
+            else:
+                serialized.append(cls._serialize_message(message))
+        return cls._sanitize_serialized_tool_pairs(serialized)
 
     @staticmethod
     def _sanitize_serialized_tool_pairs(
