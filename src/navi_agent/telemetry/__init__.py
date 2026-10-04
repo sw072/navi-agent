@@ -23,6 +23,7 @@ from .replay import (
     RuntimeReplayPlanner,
 )
 from .serializer import TraceSerializer
+from .sqlite import SQLiteRuntimeEventStore, SQLiteTraceStore
 from .store import TraceStore
 from .trace_builder import TraceBuilder
 from .trajectory import RuntimeTrajectory, RuntimeTrajectoryService
@@ -33,6 +34,8 @@ __all__ = [
     "InMemoryRuntimeEventStore",
     "JsonlTraceStore",
     "JsonlRuntimeEventStore",
+    "SQLiteRuntimeEventStore",
+    "SQLiteTraceStore",
     "LangfuseTraceExporter",
     "ModelCallTrace",
     "RuntimeTrace",

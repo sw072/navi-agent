@@ -62,14 +62,7 @@ class TraceViewerService:
         self._event_store = event_store
 
     def get_trace(self, trace_id: str) -> TraceViewerRecord | None:
-        trace = next(
-            (
-                item
-                for item in self._trace_store.list_traces(limit=None)
-                if item.trace_id == trace_id
-            ),
-            None,
-        )
+        trace = self._trace_store.get_trace(trace_id)
         if trace is None:
             return None
         events = tuple(self._event_store.list_events(run_id=trace_id))
@@ -90,24 +83,11 @@ class TraceViewerService:
         return output_path
 
     def list_sessions(self, *, limit: int = 100) -> list[SessionViewerRecord]:
-        grouped: dict[str, list[RuntimeTrace]] = {}
-        for trace in self._trace_store.list_traces(limit=None):
-            grouped.setdefault(trace.session_id, []).append(trace)
-        sessions = [
-            SessionViewerRecord(
-                session_id=session_id,
-                traces=tuple(traces),
-                loaded_skill_names=tuple(
-                    dict.fromkeys(
-                        name
-                        for trace in traces
-                        for name in _loaded_skill_names(trace)
-                    )
-                ),
-            )
-            for session_id, traces in grouped.items()
+        return [
+            session
+            for session_id in self._trace_store.list_recent_session_ids(limit=limit)
+            if (session := self.get_session(session_id)) is not None
         ]
-        return sessions[:limit]
 
     def get_session(self, session_id: str) -> SessionViewerRecord | None:
         traces = list(reversed(self._trace_store.get_session_traces(session_id)))

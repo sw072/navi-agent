@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from threading import Lock
 
-from .models import ModelCallTrace, RuntimeTrace, ToolExecutionTrace
+from .models import RuntimeTrace
 from .serializer import TraceSerializer
 
 
@@ -48,6 +47,12 @@ class JsonlTraceStore:
             traces = [trace for trace in traces if trace.user_id == user_id]
         return traces
 
+    def get_trace(self, trace_id: str) -> RuntimeTrace | None:
+        return next(
+            (trace for trace in self._read_traces() if trace.trace_id == trace_id),
+            None,
+        )
+
     def get_latest_trace(
         self,
         *,
@@ -61,6 +66,11 @@ class JsonlTraceStore:
             return None
         return traces[0]
 
+    def list_recent_session_ids(self, *, limit: int) -> list[str]:
+        return list(
+            dict.fromkeys(trace.session_id for trace in reversed(self._read_traces()))
+        )[:limit]
+
     def _read_traces(self) -> list[RuntimeTrace]:
         if not self._path.exists():
             return []
@@ -71,20 +81,5 @@ class JsonlTraceStore:
                     line = line.strip()
                     if not line:
                         continue
-                    payload = json.loads(line)
-                    traces.append(_trace_from_payload(payload))
+                    traces.append(TraceSerializer.from_json(line))
         return traces
-
-
-def _trace_from_payload(payload: dict) -> RuntimeTrace:
-    payload = dict(payload)
-    payload.pop("schema_version", None)
-    payload["model_calls"] = [
-        item if isinstance(item, ModelCallTrace) else ModelCallTrace(**item)
-        for item in payload.get("model_calls", [])
-    ]
-    payload["tool_executions"] = [
-        item if isinstance(item, ToolExecutionTrace) else ToolExecutionTrace(**item)
-        for item in payload.get("tool_executions", [])
-    ]
-    return RuntimeTrace(**payload)

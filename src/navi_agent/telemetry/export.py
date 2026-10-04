@@ -54,6 +54,9 @@ class CompositeTraceStore:
             user_id=user_id,
         )
 
+    def get_trace(self, trace_id: str) -> RuntimeTrace | None:
+        return self._primary.get_trace(trace_id)
+
     def get_latest_trace(
         self,
         *,
@@ -64,3 +67,6 @@ class CompositeTraceStore:
             session_id=session_id,
             user_id=user_id,
         )
+
+    def list_recent_session_ids(self, *, limit: int) -> list[str]:
+        return self._primary.list_recent_session_ids(limit=limit)
